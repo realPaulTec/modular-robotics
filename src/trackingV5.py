@@ -39,9 +39,7 @@ class systemTrack:
             # Using standard acquisition radius as mask radius
             radius = self.acquisitionRadius
         
-        self.refined_components, out = self.trackCycle(self.frame, radius, coordinates)
-        
-        self.simpleUI(self.frame)
+        self.refined_components, self.frame, out = self.trackCycle(self.frame, radius, coordinates)
 
         return self.refined_components, self.frame, out 
 
@@ -59,16 +57,14 @@ class systemTrack:
          # Tracking the induvidual components in an array
         refined_components, out = self.componentProcessing(colorProcessedImage, whiteImage)
         
-        return refined_components, out
+        return refined_components, self.frame, out
 
     def simpleUI(self, frame):
         # Showing the frame with all tracks
         cv2.imshow('frame', frame)
     
-        # Waiting for the button Q to be pressed to quit the software
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            self.video.release()
-            cv2.destroyAllWindows()
+        # Continuing Program
+        cv2.waitKey(1)
     
     def imageColorProcessing(self, frame, colorChannel):
         # Splitting BGR image
@@ -121,6 +117,7 @@ class systemTrack:
             yAdjusted = y + height / 2
             
             refined_components.append([i, ( xAdjusted, yAdjusted), (width, height)])
+        
         return refined_components, threshholdDisplay
 
     def componentProcessingCLAHE(self, imageToProcess, whiteImage):
@@ -206,8 +203,3 @@ class systemTrack:
         
         processedImage = cv2.convertScaleAbs(frame, alpha = alpha, beta = beta)
         return processedImage
-
-trackingSystem = systemTrack(0)
-
-while(True):
-    trackingSystem.mainCycle()
