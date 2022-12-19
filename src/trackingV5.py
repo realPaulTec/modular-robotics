@@ -203,9 +203,3 @@ class systemTrack:
         
         processedImage = cv2.convertScaleAbs(frame, alpha = alpha, beta = beta)
         return processedImage
-
-sysTrack = systemTrack(0)
-
-while True:
-    sysTrack.mainCycle()
-    sysTrack.simpleUI(sysTrack.frame)
