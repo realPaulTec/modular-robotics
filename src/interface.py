@@ -5,6 +5,7 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.uix.image import Image
 from kivy.uix.gridlayout import GridLayout
+from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.widget import Widget
 from kivy.lang.builder import Builder
 from kivy.graphics.texture import Texture
@@ -14,7 +15,7 @@ import trackingV5 as tv5
 
 trackingSystem = tv5.systemTrack(0)
 
-class MainGridLayout(Widget):
+class MainGridLayout(GridLayout):
     pass
 
 class UserInterface(App):
