@@ -1,4 +1,6 @@
-#!/home/paultec/Coding/modualar-robotics/venv/bin/python
+#!/bin/sh
+'''exec' "/home/paultec/Coding/modular-robotics Flutter/.venv/bin/python3" "$0" "$@"
+' '''
 # -*- coding: utf-8 -*-
 import re
 import sys
