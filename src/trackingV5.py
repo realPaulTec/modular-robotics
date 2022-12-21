@@ -53,8 +53,8 @@ class systemTrack:
 
         # Color processing the image with saturation and my custom colorProcessing function
         colorProcessedImage, whiteImage = self.imageColorProcessing(maskedFrame, self.targetChannel)
-
-         # Tracking the induvidual components in an array
+    
+        # Tracking the induvidual components in an array
         refined_components, out = self.componentProcessing(colorProcessedImage, whiteImage)
         
         return refined_components, self.frame, out
