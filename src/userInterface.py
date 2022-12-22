@@ -1,15 +1,12 @@
 import flet as ft
 import trackingV5 as tv5
-import numpy as np
 import cv2
 import base64
-import io
+import threading
 import multiprocessing
-import time
 
 
 tracker = tv5.systemTrack(0)
-myImage = cv2.imread('../assets/images/frame_screenshot_19.12.2022.png')
 
 def toBase64(image):
     buffer = cv2.imencode('.png', image)[1]
@@ -32,33 +29,48 @@ class application:
     def build(self, page: ft.main):
         self.page = page
 
-        # Setup
+        # Setting the main page up
         self.page.title ='Tracking with TV5'
         self.page.theme_mode = ft.ThemeMode.DARK        
         self.page.padding = 50
         
+        # Adding widgets including tracking image
         self.page.add(self.cvImage)
         self.page.add(self.label)
         self.page.update()
         
         mainloop()
 
-    def update(self,):
-        _, self.frame, _ = tracker.mainCycle()
-
+    def update(self):
+        # Converting the frame to b64 for Flet
         self.cvImage.src_base64 = toBase64(self.frame)
         
         self.counter += 1
         self.label.value = str(self.counter)
         
+        # Updating the page to apply changes
         self.page.update()
 
-mainPage = application()
+    def frameUpdate(self):
+        # Setting up tracking in thread to avoid encoding lag
+        global frame
+
+        while True:
+            _, self.frame, _ = tracker.mainCycle()
 
 def mainloop():
     while True:
         mainPage.update()
 
-ft.app(target = mainPage.build, assets_dir = '../assets')
+mainPage = application()
 
-trackingProcess.terminate()
+if __name__ == '__main__':
+    # Setting up the thread for tracking
+    mainThread = threading.Thread(target = mainPage.frameUpdate)
+    mainThread.daemon = True
+
+    mainThread.start()
+
+    # Starting the GUI 
+    ft.app(target = mainPage.build, assets_dir = '../assets')
+    
