@@ -8,16 +8,6 @@ import multiprocessing
 
 tracker = tv5.systemTrack(0)
 
-def toBase64(image):
-    buffer = cv2.imencode('.png', image)[1]
-    buffer = base64.b64encode(buffer).decode('utf-8')
-    
-    return buffer
-
-def save(image):
-    buffer = cv2.imencode('.png', image)[1].tostring()
-    cv2.imwrite('../assets/images/cframe.png', buffer)
-
 class application:
     def __init__(self) -> None:
         self.label = ft.Text(str( 0 ))
@@ -38,39 +28,61 @@ class application:
         self.page.add(self.cvImage)
         self.page.add(self.label)
         self.page.update()
-        
-        mainloop()
 
-    def update(self):
-        # Converting the frame to b64 for Flet
-        self.cvImage.src_base64 = toBase64(self.frame)
+        mainThread.start()
+
+    def interfaceUpdate(self):
+        global counter, label, page
         
-        self.counter += 1
-        self.label.value = str(self.counter)
-        
-        # Updating the page to apply changes
-        self.page.update()
+        while True:
+            self.counter += 1
+            self.label.value = str(self.counter)
+            
+            # Updating the page to apply changes
+            self.page.update()
 
     def frameUpdate(self):
-        # Setting up tracking in thread to avoid encoding lag
+        # Setting up tracking in thread to avoid lag
         global frame
 
         while True:
             _, self.frame, _ = tracker.mainCycle()
 
-def mainloop():
-    while True:
-        mainPage.update()
+    def encodingUpdate(self):
+        # Converting the frame to b64 for Flet & setting up encoding Thread to avoid lag
+        global cvImage, frame
+
+        while True:
+            self.cvImage.src_base64 = toBase64(self.frame)
+
+def toBase64(image):
+    buffer = cv2.imencode('.png', image)[1]
+    buffer = base64.b64encode(buffer).decode('utf-8')
+    
+    return buffer
 
 mainPage = application()
 
 if __name__ == '__main__':
-    # Setting up the thread for tracking
-    mainThread = threading.Thread(target = mainPage.frameUpdate)
+    # Main thread setup / Starting it later after application build()
+    mainThread = threading.Thread(target = mainPage.interfaceUpdate)
     mainThread.daemon = True
+    
+    # Tracking thread setup
+    frameThread = threading.Thread(target = mainPage.frameUpdate)
+    frameThread.daemon = True
 
-    mainThread.start()
+    frameThread.start()
+    
+    # Encoding thread setup
+    encodingThread = threading.Thread(target = mainPage.encodingUpdate)
+    encodingThread.daemon = True
+
+    encodingThread.start()
 
     # Starting the GUI 
     ft.app(target = mainPage.build, assets_dir = '../assets')
     
+# def mainloop():
+#     while True:
+#         mainPage.interfaceUpdate()
