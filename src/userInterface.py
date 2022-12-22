@@ -1,3 +1,5 @@
+#!../.venv/bin/python3.11
+
 import flet as ft
 import trackingV5 as tv5
 import cv2
