@@ -3,8 +3,6 @@ import trackingV5 as tv5
 import cv2
 import base64
 import threading
-import multiprocessing
-
 
 tracker = tv5.systemTrack(0)
 
@@ -24,7 +22,7 @@ class application:
         self.page.theme_mode = ft.ThemeMode.DARK        
         self.page.padding = 50
         
-        # Adding widgets including tracking image
+        # Adding widgets including the video feed
         self.page.add(self.cvImage)
         self.page.add(self.label)
         self.page.update()
@@ -82,7 +80,3 @@ if __name__ == '__main__':
 
     # Starting the GUI 
     ft.app(target = mainPage.build, assets_dir = '../assets')
-    
-# def mainloop():
-#     while True:
-#         mainPage.interfaceUpdate()

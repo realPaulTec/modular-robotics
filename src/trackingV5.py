@@ -159,7 +159,7 @@ class systemTrack:
             y = components[i + 1, cv2.CC_STAT_TOP]
             width = components[i + 1, cv2.CC_STAT_WIDTH]
             height = components[i + 1, cv2.CC_STAT_HEIGHT]
-            cv2.rectangle(frame, (x, y), (x + width, y + height), (0, 255, 0), 3)
+            cv2.rectangle(self.frame, (x, y), (x + width, y + height), (0, 255, 0), 3)
             
             # Refining the components by properly arranging the statistics and adjusting the coordinates to the center of the track
             xAdjusted = x + width / 2
@@ -203,3 +203,13 @@ class systemTrack:
         
         processedImage = cv2.convertScaleAbs(frame, alpha = alpha, beta = beta)
         return processedImage
+
+if __name__ == '__main__':
+    tracker = systemTrack(0)
+    
+    while True:
+        tracker.mainCycle()
+        tracker.simpleUI(tracker.frame)
+
+        if cv2.waitKey(50) and cv2.getWindowProperty('frame', cv2.WND_PROP_VISIBLE) < 1:
+            break
