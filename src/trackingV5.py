@@ -209,6 +209,7 @@ class systemTrack:
 if __name__ == '__main__':
     tracker = systemTrack(0)
     
+    # Simplified UI Window for backup use
     while True:
         tracker.mainCycle()
         tracker.simpleUI(tracker.frame)
