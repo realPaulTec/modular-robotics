@@ -15,7 +15,7 @@ class application:
         self.cvImage = ft.Image()
 
     def controls(self):
-        self.label = ft.Text(font_family='URWgothic', size=20)
+        self.label = ft.Text(font_family='URWgothic', size=16)
 
         RBS = ft.ButtonStyle(color=ft.colors.RED_ACCENT_700,
                              surface_tint_color=ft.colors.RED)
@@ -33,15 +33,36 @@ class application:
 
         self.divider = ft.VerticalDivider(
             width=9, thickness=3, color=ft.colors.WHITE)
+        self.divider_2 = ft.VerticalDivider(
+            width=100, thickness=3, color=ft.colors.WHITE)
+
+        self.labelSaturation = ft.Text(
+            value='Saturation', font_family='URWgothic', size=16)
+        self.labelContrast = ft.Text(
+            value='Contrast', font_family='URWgothic', size=16)
+        self.labelBrightness = ft.Text(
+            value='Brightness', font_family='URWgothic', size=16)
 
     def changeChannelBlue(self, *args):
         tracker.targetChannel = 0
 
+        self.redButton.disabled = False
+        self.greenButton.disabled = False
+        self.blueButton.disabled = True
+
     def changeChannelGreen(self, *args):
         tracker.targetChannel = 1
 
+        self.redButton.disabled = False
+        self.greenButton.disabled = True
+        self.blueButton.disabled = False
+
     def changeChannelRed(self, *args):
         tracker.targetChannel = 2
+
+        self.redButton.disabled = True
+        self.greenButton.disabled = False
+        self.blueButton.disabled = False
 
     def build(self, page: ft.main):
         self.controls()
@@ -63,20 +84,25 @@ class application:
             'URWgothic': f'./fonts/URWGothic-Book.otf'
         }
 
-        buttonRow = ft.Row(controls=[self.redButton, self.greenButton,
-                                     self.blueButton, self.divider], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
+        self.changeChannelBlue()
 
-        sliderCol = ft.Column(controls=[self.saturationSlider,
-                                        self.contrastSlider, self.brightnessSlider])
+        col_Sliders = ft.Column(
+            controls=[self.saturationSlider, self.contrastSlider, self.brightnessSlider])
 
-        col_1 = ft.Column(controls=[self.label, buttonRow])
-        row_0 = ft.Row(controls=[sliderCol, col_1])
+        col_labels = ft.Column(controls=[self.labelSaturation, self.labelContrast, self.labelBrightness],
+                               spacing=35, alignment=ft.MainAxisAlignment.CENTER, horizontal_alignment=ft.CrossAxisAlignment.CENTER, width=180)
 
-        col_0 = ft.Column(controls=[self.cvImage, row_0])
-        
+        row_RGB = ft.Row(
+            controls=[self.redButton, self.greenButton, self.blueButton])
+
+        col_RGB = ft.Column(controls=[self.label, row_RGB], alignment=ft.MainAxisAlignment.CENTER,
+                            horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=20)
+
+        row_0 = ft.Row(controls=[col_Sliders, col_labels, col_RGB])
+        col_Main = ft.Column(controls=[self.cvImage, row_0])
 
         self.mainContainer = ft.Container(
-            content=col_0, margin=20, padding=20, bgcolor=ft.colors.BLACK12, border_radius=20, alignment=ft.alignment.center)
+            content=col_Main, margin=20, padding=20, bgcolor=ft.colors.BLACK12, border_radius=20, alignment=ft.alignment.center)
 
         mainRow = ft.Row(controls=[self.mainContainer])
 
@@ -99,7 +125,7 @@ class application:
             elif tracker.targetChannel == 2:
                 colorChannel = 'Red'
 
-            self.label.value = 'Currently Targeting the %s color Channel' % colorChannel
+            self.label.value = 'Targeting %s channel' % colorChannel
 
             # Updating the page to apply changes
             self.page.update()
