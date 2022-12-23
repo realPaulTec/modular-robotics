@@ -51,9 +51,9 @@ class application:
         self.saturationSlider = ft.Slider(
             min=0, max=2, value=1.2)
         self.contrastSlider = ft.Slider(
-            min=0, max=2, value=1.02)
+            min=0, max=127, value=127)
         self.brightnessSlider = ft.Slider(
-            min=0, max=1, value=0)
+            min=0, max=255, value=255)
 
         # Setting the main page up
         self.page.title = 'Tracking with TV5'
@@ -64,17 +64,21 @@ class application:
         }
 
         buttonRow = ft.Row(controls=[self.redButton, self.greenButton,
-                                     self.blueButton, self.divider, self.label], alignment = ft.MainAxisAlignment.CENTER)
-
-        col_0 = ft.Column(controls=[self.cvImage, buttonRow])
-        
-        self.mainContainer = ft.Container(
-            content=col_0, margin=20, padding=20, bgcolor=ft.colors.BLACK12, border_radius=20, alignment = ft.alignment.center)
+                                     self.blueButton, self.divider], alignment=ft.MainAxisAlignment.SPACE_BETWEEN)
 
         sliderCol = ft.Column(controls=[self.saturationSlider,
                                         self.contrastSlider, self.brightnessSlider])
 
-        mainRow = ft.Row(controls=[self.mainContainer, sliderCol])
+        col_1 = ft.Column(controls=[self.label, buttonRow])
+        row_0 = ft.Row(controls=[sliderCol, col_1])
+
+        col_0 = ft.Column(controls=[self.cvImage, row_0])
+        
+
+        self.mainContainer = ft.Container(
+            content=col_0, margin=20, padding=20, bgcolor=ft.colors.BLACK12, border_radius=20, alignment=ft.alignment.center)
+
+        mainRow = ft.Row(controls=[self.mainContainer])
 
         # Adding widgets including the video feed
         self.page.add(mainRow)
@@ -118,11 +122,13 @@ class application:
         while True:
             self.cvImage.src_base64 = toBase64(self.frame)
 
+
 def toBase64(image):
     buffer = cv2.imencode('.png', image)[1]
     buffer = base64.b64encode(buffer).decode('utf-8')
 
     return buffer
+
 
 mainPage = application()
 
