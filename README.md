@@ -1,7 +1,6 @@
 # modular-robotics
-This is the official Modular Robotics (platform) repository - MRP, also as the Visual Robotic Tracking Platform - VRTP || VRTP runs on python 3.9
+This is the official Modular Robotics (platform) repository - MRP, also as the (Visual) Robotic Tracking Platform - VRTP
 
-[en]
-The Modular Robotics platform is a initiative to create a simple user-friendly and cost-effective robotics system for personal use. The robot developed from the Modular Robotics project will have a wide range of use cases based around carrying loads, ranging from carrying groceries for old or disabled people and also generally people who don't enjoy carrying loads. Same can be said in it's applications during a long hiking trip, carrying water, food or a tent. Another foreseen use of the MRP is it's employment as a test platform for new tracking, localization and AI technologies alongside testing of new hardware. For it's personal use application it will have a focus on safety with features like the auto-stopping on the loss of the track, the fire-protected LiPo battery or the plan to implement a LIDAR based object avoidance system in the future. Another feature of the MRP is the utilization of modular, simple-exchange addons like a carrying basket.
+The software for the VRTP is simply reffered to as the Visual Tracking System - VTS
 
-The Systems light tracking design allows the VRTP to be a cost effective and cheap tracking solution with a simple Webcam, although a higher Quality camera is strongly recommended.
+The VRTP project aims to create a deployable people tracking and following system for robots. The current iteration of VRTP utilises a camera to track colored lights attached to the leg of the person which should be followed. The end goal is to develop a full MRP platform, i.e a full robot deploying the VRTP tracking system which can follow people.
