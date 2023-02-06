@@ -23,10 +23,25 @@ class systemTrack:
         self.frame = None
         self.refined_components = []
 
+        self.frameHistory = {
+            "camera feed" : None,
+            "color corrected" : None,
+            "masked frame" : None,
+            "color channel image" : None,
+            "white image" : None,
+            "threshholding channel" : None,
+            "threshholding white" : None,
+            "combination" : None,
+            "tracking image" : None,
+            "final" : None
+        }
+
     def mainCycle(self):
         # Reading the frame displated by the system camera
         stream = self.video.read()
         self.frame = stream[1]
+
+        self.frameHistory["camera feed"] = self.frame
 
         if len(self.refined_components) > 0:
             # Using first track coordinates as mask coordinates
@@ -44,28 +59,37 @@ class systemTrack:
             # Using standard acquisition radius as mask radius
             radius = self.acquisitionRadius
 
-        self.refined_components, self.frame, out = self.trackCycle(
+        self.refined_components, self.frame, _ = self.trackCycle(
             self.frame, radius, coordinates)
 
-        return self.refined_components, self.frame, out
+        return self.refined_components, self.frame, self.frameHistory
 
     def trackCycle(self, frame, mRadius, mCoordinates):
-        # Stage one color processing
+        # Stage one color correction
         self.frame = self.adjustSaturation(
             self.frame, self.saturationAdjustment)
         self.frame = self.adjustContrast(
             self.frame, self.contrastAdjustment, self.brightnessAdjustment)
+        
+        self.frameHistory["color corrected"] = self.frame
 
         # Applying mask with my own function
         maskedFrame = self.circualarMasking(self.frame, mCoordinates, mRadius)
+
+        self.frameHistory["masked frame"] = maskedFrame
 
         # Color processing the image with saturation and my custom colorProcessing function
         colorProcessedImage, whiteImage = self.imageColorProcessing(
             maskedFrame, self.targetChannel)
 
+        self.frameHistory["color channel image"] = colorProcessedImage
+        self.frameHistory["white image"] = whiteImage
+
         # Tracking the induvidual components in an array
         refined_components, out = self.componentProcessing(
             colorProcessedImage, whiteImage)
+
+        self.frameHistory["final"] = self.frame
 
         return refined_components, self.frame, out
 
@@ -82,19 +106,26 @@ class systemTrack:
 
         # Processing target color channel and white channel || Blurring to remove hard edges
         blurredImage = cv2.GaussianBlur(channels[colorChannel], (11, 11), 0)
-        grayscaleImage = cv2.GaussianBlur(
-            cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (11, 11), 0)
+        grayscaleImage = cv2.GaussianBlur(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (11, 11), 0)
+        
         return blurredImage, grayscaleImage
 
     def componentProcessing(self, imageToProcess, whiteImage):
         # Threshholding (grayscale) white and target color channel images
-        threshhold = cv2.threshold(
-            imageToProcess, 250, 255, cv2.THRESH_BINARY)[1]
+        threshholdChannel = cv2.threshold(
+            imageToProcess, 240, 255, cv2.THRESH_BINARY)[1]
         threshholdWhite = cv2.threshold(
             whiteImage, 200, 255, cv2.THRESH_BINARY)[1]
+        
+        self.frameHistory["threshholding channel"] = threshholdChannel
+        self.frameHistory["threshholding white"] = threshholdWhite
 
         # Subtracting white threshhold to avoid tracking bright lights maxing out all BGR channels
-        threshhold -= threshholdWhite
+        threshholdWhite = cv2.dilate(threshholdWhite, None, iterations=6)
+        
+        threshhold = threshholdChannel - threshholdWhite
+
+        self.frameHistory["combination"] = threshhold
 
         # using cv2 morphology to remove noise and small light sources (e.g. reflections)
         threshhold = cv2.dilate(threshhold, None, iterations=2)
@@ -105,6 +136,8 @@ class systemTrack:
         threshhold = cv2.erode(threshhold, None, iterations=10)
 
         threshholdDisplay = threshhold  # Testing
+
+        self.frameHistory["tracking image"] = threshhold
 
         # re-threshholding the processed image to purify the white output and avoid possible dark connecting islands
         threshhold = cv2.threshold(threshhold, 200, 255, cv2.THRESH_BINARY)[1]
@@ -252,7 +285,7 @@ class systemTrack:
 
 
 if __name__ == '__main__':
-    tracker = systemTrack(0)
+    tracker = systemTrack(1)
     
     # Simplified UI Window for backup use
     while True:

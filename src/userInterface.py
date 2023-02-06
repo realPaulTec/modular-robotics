@@ -6,7 +6,7 @@ import cv2
 import base64
 import threading
 
-tracker = tv5.systemTrack(0)
+tracker = tv5.systemTrack(1)
 
 
 class application:
@@ -76,6 +76,24 @@ class application:
         self.brightnessSlider = ft.Slider(
             min=0, max=255, value=255)
 
+        self.displayFrameDropdown = ft.Dropdown(
+            width=250,
+            options= [
+                ft.dropdown.Option("camera feed"),
+                ft.dropdown.Option("color corrected"),
+                ft.dropdown.Option("masked frame"),
+                ft.dropdown.Option("color channel image"),
+                ft.dropdown.Option("white image"),
+                ft.dropdown.Option("threshholding channel"),
+                ft.dropdown.Option("threshholding white"),
+                ft.dropdown.Option("combination"),
+                ft.dropdown.Option("tracking image"),
+                ft.dropdown.Option("final")
+            ]
+        )
+
+        self.displayFrameDropdown.value = "final"
+
         # Setting the main page up
         self.page.title = 'Tracking with TV5'
         self.page.theme_mode = ft.ThemeMode.DARK
@@ -99,7 +117,8 @@ class application:
                             horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=20)
 
         row_0 = ft.Row(controls=[col_Sliders, col_labels, col_RGB])
-        col_Main = ft.Column(controls=[self.cvImage, row_0])
+        row_1 = ft.Row(controls=[self.displayFrameDropdown])
+        col_Main = ft.Column(controls=[self.cvImage, row_0, row_1])
 
         self.mainContainer = ft.Container(
             content=col_Main, margin=20, padding=20, bgcolor=ft.colors.BLACK12, border_radius=20, alignment=ft.alignment.center)
@@ -139,7 +158,10 @@ class application:
             tracker.saturationAdjustment = self.saturationSlider.value
             tracker.brightnessAdjustment = self.brightnessSlider.value
 
-            _, self.frame, _ = tracker.mainCycle()
+            _, self.frame, self.frameHistory = tracker.mainCycle()
+
+            # Select which frame to show
+            self.frame = self.frameHistory[str(self.displayFrameDropdown.value)]
 
     def encodingUpdate(self):
         # Converting the frame to b64 for Flet & setting up encoding Thread to avoid lag
