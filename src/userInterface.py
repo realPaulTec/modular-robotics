@@ -6,7 +6,7 @@ import cv2
 import base64
 import threading
 
-tracker = tv5.systemTrack(1)
+tracker = tv5.systemTrack(-1)
 
 
 class application:
@@ -82,9 +82,13 @@ class application:
                 ft.dropdown.Option("camera feed"),
                 ft.dropdown.Option("color corrected"),
                 ft.dropdown.Option("masked frame"),
-                ft.dropdown.Option("color channel image"),
+                ft.dropdown.Option("blue image"),
+                ft.dropdown.Option("green image"),
+                ft.dropdown.Option("red image"),
                 ft.dropdown.Option("white image"),
-                ft.dropdown.Option("threshholding channel"),
+                ft.dropdown.Option("threshholding blue"),
+                ft.dropdown.Option("threshholding green"),
+                ft.dropdown.Option("threshholding red"),
                 ft.dropdown.Option("threshholding white"),
                 ft.dropdown.Option("combination"),
                 ft.dropdown.Option("tracking image"),
@@ -118,12 +122,12 @@ class application:
 
         row_0 = ft.Row(controls=[col_Sliders, col_labels, col_RGB])
         row_1 = ft.Row(controls=[self.displayFrameDropdown])
-        col_Main = ft.Column(controls=[self.cvImage, row_0, row_1])
+        col_Main = ft.Column(controls=[self.cvImage, row_0, row_1], alignment=ft.MainAxisAlignment.CENTER)
 
         self.mainContainer = ft.Container(
             content=col_Main, margin=20, padding=20, bgcolor=ft.colors.BLACK12, border_radius=20, alignment=ft.alignment.center)
 
-        mainRow = ft.Row(controls=[self.mainContainer])
+        mainRow = ft.Row(controls=[self.mainContainer], alignment=ft.MainAxisAlignment.CENTER, vertical_alignment=ft.CrossAxisAlignment.CENTER)
 
         # Adding widgets including the video feed
         self.page.add(mainRow)

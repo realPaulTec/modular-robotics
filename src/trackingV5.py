@@ -22,14 +22,20 @@ class systemTrack:
 
         self.frame = None
         self.refined_components = []
+        self.colorThreshholdValue = 230
+        self.whiteThreshholdValue = 200
 
         self.frameHistory = {
             "camera feed" : None,
             "color corrected" : None,
             "masked frame" : None,
-            "color channel image" : None,
+            "blue image" : None,
+            "green image" : None,
+            "red image" : None,
             "white image" : None,
-            "threshholding channel" : None,
+            "threshholding blue" : None,
+            "threshholding green" : None,
+            "threshholding red" : None,
             "threshholding white" : None,
             "combination" : None,
             "tracking image" : None,
@@ -79,15 +85,16 @@ class systemTrack:
         self.frameHistory["masked frame"] = maskedFrame
 
         # Color processing the image with saturation and my custom colorProcessing function
-        colorProcessedImage, whiteImage = self.imageColorProcessing(
-            maskedFrame, self.targetChannel)
+        images, whiteImage = self.imageColorProcessing(maskedFrame)
 
-        self.frameHistory["color channel image"] = colorProcessedImage
+        self.frameHistory["blue image"] = images[0]
+        self.frameHistory["green image"] = images[1]
+        self.frameHistory["red image"] = images[2]
+        
         self.frameHistory["white image"] = whiteImage
 
         # Tracking the induvidual components in an array
-        refined_components, out = self.componentProcessing(
-            colorProcessedImage, whiteImage)
+        refined_components, out = self.componentProcessing(images, whiteImage)
 
         self.frameHistory["final"] = self.frame
 
@@ -100,38 +107,54 @@ class systemTrack:
         # Continuing Program
         cv2.waitKey(1)
 
-    def imageColorProcessing(self, frame, colorChannel):
+    def imageColorProcessing(self, frame):
         # Splitting BGR image
         channels = cv2.split(frame)
 
         # Processing target color channel and white channel || Blurring to remove hard edges
-        blurredImage = cv2.GaussianBlur(channels[colorChannel], (11, 11), 0)
+        blueImage = cv2.GaussianBlur(channels[0], (11, 11), 0)
+        greenImage = cv2.GaussianBlur(channels[1], (11, 11), 0)
+        redImage = cv2.GaussianBlur(channels[2], (11, 11), 0)
+
+        images = (blueImage, greenImage, redImage)
+
         grayscaleImage = cv2.GaussianBlur(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), (11, 11), 0)
         
-        return blurredImage, grayscaleImage
+        return images, grayscaleImage
 
-    def componentProcessing(self, imageToProcess, whiteImage):
+    def componentProcessing(self, images, whiteImage):
         # Threshholding (grayscale) white and target color channel images
-        threshholdChannel = cv2.threshold(
-            imageToProcess, 240, 255, cv2.THRESH_BINARY)[1]
-        threshholdWhite = cv2.threshold(
-            whiteImage, 200, 255, cv2.THRESH_BINARY)[1]
-        
-        self.frameHistory["threshholding channel"] = threshholdChannel
+        threshholdBlue = cv2.threshold(images[0], self.colorThreshholdValue, 255, cv2.THRESH_BINARY)[1]
+        threshholdGreen = cv2.threshold(images[1], self.colorThreshholdValue, 255, cv2.THRESH_BINARY)[1]
+        threshholdRed = cv2.threshold(images[2], self.colorThreshholdValue, 255, cv2.THRESH_BINARY)[1]
+
+        threshholds = (threshholdBlue, threshholdGreen, threshholdRed)
+        threshhold = threshholds[self.targetChannel]
+
+        threshholdWhite = cv2.threshold(whiteImage, self.whiteThreshholdValue, 255, cv2.THRESH_BINARY)[1]
+
+        self.frameHistory["threshholding blue"] = threshholds[0]
+        self.frameHistory["threshholding green"] = threshholds[1]
+        self.frameHistory["threshholding red"] = threshholds[2]
+
         self.frameHistory["threshholding white"] = threshholdWhite
 
         # Subtracting white threshhold to avoid tracking bright lights maxing out all BGR channels
         threshholdWhite = cv2.dilate(threshholdWhite, None, iterations=6)
         
-        threshhold = threshholdChannel - threshholdWhite
+        for currentThreshhold in threshholds:
+            if not np.array_equiv(threshholds[self.targetChannel], currentThreshhold):
+                currentThreshhold = cv2.dilate(currentThreshhold, None, iterations=6)
+                threshhold -= currentThreshhold
+
+        threshhold -= threshholdWhite
 
         self.frameHistory["combination"] = threshhold
 
         # using cv2 morphology to remove noise and small light sources (e.g. reflections)
         threshhold = cv2.dilate(threshhold, None, iterations=2)
 
-        threshhold = cv2.morphologyEx(
-            threshhold, cv2.MORPH_OPEN, None, iterations=2)
+        threshhold = cv2.morphologyEx(threshhold, cv2.MORPH_OPEN, None, iterations=2)
         threshhold = cv2.dilate(threshhold, None, iterations=20)
         threshhold = cv2.erode(threshhold, None, iterations=10)
 
@@ -165,8 +188,7 @@ class systemTrack:
             xAdjusted = x + width / 2
             yAdjusted = y + height / 2
 
-            refined_components.append(
-                [i, (xAdjusted, yAdjusted), (width, height)])
+            refined_components.append([i, (xAdjusted, yAdjusted), (width, height)])
 
         return refined_components, threshholdDisplay
 
@@ -178,10 +200,8 @@ class systemTrack:
         cv2.cvtColor(clahe.apply(cv2.cvtColor(
             whiteImage, cv2.COLOR_BGR2LAB)), cv2.COLOR_LAB2BGR)
         # Threshholding (grayscale) white and target color channel images
-        threshhold = cv2.threshold(
-            imageToProcess, 250, 255, cv2.THRESH_BINARY)[1]
-        threshholdWhite = cv2.threshold(
-            whiteImage, 200, 255, cv2.THRESH_BINARY)[1]
+        threshhold = cv2.threshold(imageToProcess, 250, 255, cv2.THRESH_BINARY)[1]
+        threshholdWhite = cv2.threshold(whiteImage, 200, 255, cv2.THRESH_BINARY)[1]
 
         # Subtracting white threshhold to avoid tracking bright lights maxing out all BGR channels
         threshhold -= threshholdWhite
@@ -189,8 +209,7 @@ class systemTrack:
         # using cv2 morphology to remove noise and small light sources (e.g. reflections)
         threshhold = cv2.dilate(threshhold, None, iterations=2)
 
-        threshhold = cv2.morphologyEx(
-            threshhold, cv2.MORPH_OPEN, None, iterations=2)
+        threshhold = cv2.morphologyEx(threshhold, cv2.MORPH_OPEN, None, iterations=2)
         threshhold = cv2.dilate(threshhold, None, iterations=20)
         threshhold = cv2.erode(threshhold, None, iterations=10)
 
@@ -200,8 +219,7 @@ class systemTrack:
         threshhold = cv2.threshold(threshhold, 200, 255, cv2.THRESH_BINARY)[1]
 
         # Letting OpenCV recognise the white islands left by previous operations
-        connected_components_stats = cv2.connectedComponentsWithStats(
-            threshhold, 1, cv2.CV_32S)  # Note: Adjust algorithm
+        connected_components_stats = cv2.connectedComponentsWithStats(threshhold, 1, cv2.CV_32S)  # Note: Adjust algorithm
 
         # Getting statistics about those islands
         components = connected_components_stats[2]
@@ -215,8 +233,7 @@ class systemTrack:
             y = components[i + 1, cv2.CC_STAT_TOP]
             width = components[i + 1, cv2.CC_STAT_WIDTH]
             height = components[i + 1, cv2.CC_STAT_HEIGHT]
-            cv2.rectangle(self.frame, (x, y),
-                          (x + width, y + height), (0, 255, 0), 3)
+            cv2.rectangle(self.frame, (x, y), (x + width, y + height), (0, 255, 0), 3)
 
             # Refining the components by properly arranging the statistics and adjusting the coordinates to the center of the track
             xAdjusted = x + width / 2
@@ -285,7 +302,7 @@ class systemTrack:
 
 
 if __name__ == '__main__':
-    tracker = systemTrack(1)
+    tracker = systemTrack(-1)
     
     # Simplified UI Window for backup use
     while True:
