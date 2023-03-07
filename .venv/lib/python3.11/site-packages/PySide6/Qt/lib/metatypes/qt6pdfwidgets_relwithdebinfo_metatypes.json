@@ -1,0 +1,235 @@
+[
+    {
+        "classes": [
+            {
+                "className": "QPdfView",
+                "enums": [
+                    {
+                        "isClass": true,
+                        "isFlag": false,
+                        "name": "PageMode",
+                        "values": [
+                            "SinglePage",
+                            "MultiPage"
+                        ]
+                    },
+                    {
+                        "isClass": true,
+                        "isFlag": false,
+                        "name": "ZoomMode",
+                        "values": [
+                            "Custom",
+                            "FitToWidth",
+                            "FitInView"
+                        ]
+                    }
+                ],
+                "object": true,
+                "properties": [
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 0,
+                        "name": "document",
+                        "notify": "documentChanged",
+                        "read": "document",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QPdfDocument*",
+                        "user": false,
+                        "write": "setDocument"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 1,
+                        "name": "pageMode",
+                        "notify": "pageModeChanged",
+                        "read": "pageMode",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "PageMode",
+                        "user": false,
+                        "write": "setPageMode"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 2,
+                        "name": "zoomMode",
+                        "notify": "zoomModeChanged",
+                        "read": "zoomMode",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "ZoomMode",
+                        "user": false,
+                        "write": "setZoomMode"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 3,
+                        "name": "zoomFactor",
+                        "notify": "zoomFactorChanged",
+                        "read": "zoomFactor",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "qreal",
+                        "user": false,
+                        "write": "setZoomFactor"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 4,
+                        "name": "pageSpacing",
+                        "notify": "pageSpacingChanged",
+                        "read": "pageSpacing",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "int",
+                        "user": false,
+                        "write": "setPageSpacing"
+                    },
+                    {
+                        "constant": false,
+                        "designable": true,
+                        "final": false,
+                        "index": 5,
+                        "name": "documentMargins",
+                        "notify": "documentMarginsChanged",
+                        "read": "documentMargins",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QMargins",
+                        "user": false,
+                        "write": "setDocumentMargins"
+                    }
+                ],
+                "qualifiedClassName": "QPdfView",
+                "signals": [
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "document",
+                                "type": "QPdfDocument*"
+                            }
+                        ],
+                        "name": "documentChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "pageMode",
+                                "type": "QPdfView::PageMode"
+                            }
+                        ],
+                        "name": "pageModeChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "zoomMode",
+                                "type": "QPdfView::ZoomMode"
+                            }
+                        ],
+                        "name": "zoomModeChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "zoomFactor",
+                                "type": "qreal"
+                            }
+                        ],
+                        "name": "zoomFactorChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "pageSpacing",
+                                "type": "int"
+                            }
+                        ],
+                        "name": "pageSpacingChanged",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "documentMargins",
+                                "type": "QMargins"
+                            }
+                        ],
+                        "name": "documentMarginsChanged",
+                        "returnType": "void"
+                    }
+                ],
+                "slots": [
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "mode",
+                                "type": "QPdfView::PageMode"
+                            }
+                        ],
+                        "name": "setPageMode",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "mode",
+                                "type": "QPdfView::ZoomMode"
+                            }
+                        ],
+                        "name": "setZoomMode",
+                        "returnType": "void"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "factor",
+                                "type": "qreal"
+                            }
+                        ],
+                        "name": "setZoomFactor",
+                        "returnType": "void"
+                    }
+                ],
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QAbstractScrollArea"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "qpdfview.h",
+        "outputRevision": 68
+    }
+]

@@ -1,0 +1,42 @@
+[
+    {
+        "classes": [
+            {
+                "classInfos": [
+                    {
+                        "name": "QML.Element",
+                        "value": "auto"
+                    },
+                    {
+                        "name": "QML.Singleton",
+                        "value": "true"
+                    }
+                ],
+                "className": "ComponentCreator",
+                "methods": [
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "data",
+                                "type": "QByteArray"
+                            }
+                        ],
+                        "name": "createComponent",
+                        "returnType": "QQmlComponent*"
+                    }
+                ],
+                "object": true,
+                "qualifiedClassName": "QQuickControlsTestUtils::ComponentCreator",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "controlstestutils_p.h",
+        "outputRevision": 68
+    }
+]

@@ -1,0 +1,32 @@
+# Copyright (C) 2022 The Qt Company Ltd.
+# SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
+#
+#, fuzzy
+msgid ""
+msgstr ""
+"Project-Id-Version: PySide6 gettext example\n"
+"POT-Creation-Date: 2021-07-05 14:16+0200\n"
+"Language: de_DE\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=n != 1;\n"
+
+#: main.py:57
+msgid "&File"
+msgstr "&Datei"
+
+#: main.py:58
+msgid "Quit"
+msgstr "Beenden"
+
+#: main.py:59
+msgid "CTRL+Q"
+msgstr "CTRL+B"
+
+#: main.py:73
+#, python-brace-format
+msgid "{0} language selected"
+msgid_plural "{0} languages selected"
+msgstr[0] "{0} Sprache ausgewählt"
+msgstr[1] "{0} Sprachen ausgewählt"

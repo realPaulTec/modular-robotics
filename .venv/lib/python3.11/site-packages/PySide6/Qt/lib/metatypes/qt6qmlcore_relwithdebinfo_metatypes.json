@@ -1,0 +1,383 @@
+[
+    {
+        "classes": [
+            {
+                "classInfos": [
+                    {
+                        "name": "QML.Singleton",
+                        "value": "true"
+                    },
+                    {
+                        "name": "QML.Element",
+                        "value": "StandardPaths"
+                    },
+                    {
+                        "name": "QML.AddedInVersion",
+                        "value": "1538"
+                    },
+                    {
+                        "name": "QML.Extended",
+                        "value": "QStandardPaths"
+                    },
+                    {
+                        "name": "QML.ExtensionIsNamespace",
+                        "value": "true"
+                    }
+                ],
+                "className": "QQmlStandardPaths",
+                "methods": [
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "type",
+                                "type": "QStandardPaths::StandardLocation"
+                            }
+                        ],
+                        "name": "displayName",
+                        "returnType": "QString"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "executableName",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "paths",
+                                "type": "QStringList"
+                            }
+                        ],
+                        "name": "findExecutable",
+                        "returnType": "QUrl"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "executableName",
+                                "type": "QString"
+                            }
+                        ],
+                        "name": "findExecutable",
+                        "returnType": "QUrl"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "type",
+                                "type": "QStandardPaths::StandardLocation"
+                            },
+                            {
+                                "name": "fileName",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "options",
+                                "type": "QStandardPaths::LocateOptions"
+                            }
+                        ],
+                        "name": "locate",
+                        "returnType": "QUrl"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "type",
+                                "type": "QStandardPaths::StandardLocation"
+                            },
+                            {
+                                "name": "fileName",
+                                "type": "QString"
+                            }
+                        ],
+                        "name": "locate",
+                        "returnType": "QUrl"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "type",
+                                "type": "QStandardPaths::StandardLocation"
+                            },
+                            {
+                                "name": "fileName",
+                                "type": "QString"
+                            },
+                            {
+                                "name": "options",
+                                "type": "QStandardPaths::LocateOptions"
+                            }
+                        ],
+                        "name": "locateAll",
+                        "returnType": "QList<QUrl>"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "type",
+                                "type": "QStandardPaths::StandardLocation"
+                            },
+                            {
+                                "name": "fileName",
+                                "type": "QString"
+                            }
+                        ],
+                        "name": "locateAll",
+                        "returnType": "QList<QUrl>"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "type",
+                                "type": "QStandardPaths::StandardLocation"
+                            }
+                        ],
+                        "name": "standardLocations",
+                        "returnType": "QList<QUrl>"
+                    },
+                    {
+                        "access": "public",
+                        "arguments": [
+                            {
+                                "name": "type",
+                                "type": "QStandardPaths::StandardLocation"
+                            }
+                        ],
+                        "name": "writableLocation",
+                        "returnType": "QUrl"
+                    }
+                ],
+                "object": true,
+                "qualifiedClassName": "QQmlStandardPaths",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "qqmlstandardpaths_p.h",
+        "outputRevision": 68
+    },
+    {
+        "classes": [
+            {
+                "classInfos": [
+                    {
+                        "name": "QML.Singleton",
+                        "value": "true"
+                    },
+                    {
+                        "name": "QML.Element",
+                        "value": "SystemInformation"
+                    },
+                    {
+                        "name": "QML.AddedInVersion",
+                        "value": "1540"
+                    }
+                ],
+                "className": "QQmlSystemInformation",
+                "enums": [
+                    {
+                        "isClass": true,
+                        "isFlag": false,
+                        "name": "Endian",
+                        "values": [
+                            "Big",
+                            "Little"
+                        ]
+                    }
+                ],
+                "object": true,
+                "properties": [
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 0,
+                        "name": "wordSize",
+                        "read": "wordSize",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "int",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 1,
+                        "name": "byteOrder",
+                        "read": "byteOrder",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QQmlSystemInformation::Endian",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 2,
+                        "name": "buildCpuArchitecture",
+                        "read": "buildCpuArchitecture",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 3,
+                        "name": "currentCpuArchitecture",
+                        "read": "currentCpuArchitecture",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 4,
+                        "name": "buildAbi",
+                        "read": "buildAbi",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 5,
+                        "name": "kernelType",
+                        "read": "kernelType",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 6,
+                        "name": "kernelVersion",
+                        "read": "kernelVersion",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 7,
+                        "name": "productType",
+                        "read": "productType",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 8,
+                        "name": "productVersion",
+                        "read": "productVersion",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 9,
+                        "name": "prettyProductName",
+                        "read": "prettyProductName",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 10,
+                        "name": "machineHostName",
+                        "read": "machineHostName",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QString",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 11,
+                        "name": "machineUniqueId",
+                        "read": "machineUniqueId",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QByteArray",
+                        "user": false
+                    },
+                    {
+                        "constant": true,
+                        "designable": true,
+                        "final": true,
+                        "index": 12,
+                        "name": "bootUniqueId",
+                        "read": "bootUniqueId",
+                        "required": false,
+                        "scriptable": true,
+                        "stored": true,
+                        "type": "QByteArray",
+                        "user": false
+                    }
+                ],
+                "qualifiedClassName": "QQmlSystemInformation",
+                "superClasses": [
+                    {
+                        "access": "public",
+                        "name": "QObject"
+                    }
+                ]
+            }
+        ],
+        "inputFile": "qqmlsysteminformation_p.h",
+        "outputRevision": 68
+    }
+]
