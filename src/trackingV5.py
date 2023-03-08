@@ -66,8 +66,6 @@ class systemTrack:
 
         self.frameHistory["camera feed"] = frame
 
-        print(self.refined_components)
-
         if len(self.refined_components) > 0:
             # Using first track coordinates as mask coordinates
             (x, y) = self.refined_components[0][1]
@@ -137,11 +135,23 @@ class systemTrack:
 
     def componentProcessing(self, images, frame):
         # Threshholding (grayscale) white and target color channel images
-        threshholdBlue = cv2.threshold(images[0], self.threshholdBlueMin, 255, cv2.THRESH_BINARY)[1]
-        threshholdGreen = cv2.threshold(images[1], self.threshholdGreenMin, 255, cv2.THRESH_BINARY)[1]
-        threshholdRed = cv2.threshold(images[2], self.threshholdRedMin, 255, cv2.THRESH_BINARY)[1]
+        threshholdBlueMin = cv2.threshold(images[0], self.threshholdBlueMin, 255, cv2.THRESH_BINARY)[1]
+        threshholdGreenMin = cv2.threshold(images[1], self.threshholdGreenMin, 255, cv2.THRESH_BINARY)[1]
+        threshholdRedMin = cv2.threshold(images[2], self.threshholdRedMin, 255, cv2.THRESH_BINARY)[1]
 
-        threshholdWhite = cv2.threshold(images[3], self.threshholdBrightMin, 255, cv2.THRESH_BINARY)[1]
+        threshholdWhiteMin = cv2.threshold(images[3], self.threshholdBrightMin, 255, cv2.THRESH_BINARY)[1]
+
+        threshholdBlueMax = cv2.threshold(images[0], self.threshholdBlueMax, 255, cv2.THRESH_BINARY)[1]
+        threshholdGreenMax = cv2.threshold(images[1], self.threshholdGreenMax, 255, cv2.THRESH_BINARY)[1]
+        threshholdRedMax = cv2.threshold(images[2], self.threshholdRedMax, 255, cv2.THRESH_BINARY)[1]
+
+        threshholdWhiteMax = cv2.threshold(images[3], self.threshholdBrightMax, 255, cv2.THRESH_BINARY)[1]
+
+        threshholdBlue = threshholdBlueMin - threshholdBlueMax
+        threshholdGreen = threshholdGreenMin - threshholdGreenMax
+        threshholdRed = threshholdRedMin - threshholdRedMax
+
+        threshholdWhite = threshholdWhiteMin - threshholdWhiteMax
 
         threshholds = [threshholdBlue, threshholdGreen, threshholdRed, threshholdWhite]
         threshhold = threshholds[self.targetChannel]
@@ -155,9 +165,9 @@ class systemTrack:
 
                     threshhold -= (currentThreshhold)
 
-        self.frameHistory["threshholding blue"] = threshholds[0]
-        self.frameHistory["threshholding green"] = threshholds[1]
-        self.frameHistory["threshholding red"] = threshholds[2]
+        self.frameHistory["threshholding blue"] = threshholdBlue # threshholds[0]
+        self.frameHistory["threshholding green"] = threshholdGreen # threshholds[1]
+        self.frameHistory["threshholding red"] = threshholdRed # threshholds[2]
 
         self.frameHistory["threshholding white"] = threshholds[3]
 
