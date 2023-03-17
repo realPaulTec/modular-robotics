@@ -30,7 +30,7 @@ THRESHOLD_SCANS_PROCESSING = 10
 DILATION_STEPS = 2
 MORPHOLOGY_STEPS = 4
 
-AREA_THRESHOLD = 4
+AREA_THRESHOLD = 10
 
 DILATION_KERNEL = np.ones((2, 2), np.uint8) 
 MORPH_KERNEL = np.ones((3, 3), np.uint8)
@@ -121,7 +121,7 @@ def scan_thread():
             components = connectedLiDAR[2]
             totalComponents = connectedLiDAR[0]
 
-            graphingMatrix = connectedLiDAR[1]
+            graphingMatrix = connectedLiDAR[1] # (connectedLiDAR[1] == 2).astype(np.uint8)
 
             for i in range(totalComponents - 1):
                 if components[i + 1, cv2.CC_STAT_AREA] >= AREA_THRESHOLD:
@@ -131,12 +131,15 @@ def scan_thread():
                         'y'         : components[i + 1, cv2.CC_STAT_TOP],
                         'width'     : components[i + 1, cv2.CC_STAT_WIDTH],
                         'height'    : components[i + 1, cv2.CC_STAT_HEIGHT],
-                        'area'      : components[i + 1, cv2.CC_STAT_AREA]
+                        'area'      : components[i + 1, cv2.CC_STAT_AREA],
+                        'matrix'    : (connectedLiDAR[1] == i).astype(np.uint8)
                     }
                     
                     LiDARcomponents.append(component)
 
                     print('I: %s || x: %s || y: %s || a: %s' %(component['index'], component['x'], component['y'], component['area']))
+
+            graphingMatrix = processingMatrix
 
             # Printing delta time
             print('Delta Time: %ss' %(format((secondaryTime - primaryTime), '.2f')))
