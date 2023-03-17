@@ -14,7 +14,7 @@ import cv2
 
 
 cameraIndex = 1
-tracker = tv5.systemTrack(-1)
+tracker = tv5.systemTrack(1)
 
 class Backend:
     def __init__(self, src, imageProvider) -> None:
@@ -57,18 +57,18 @@ class Backend:
             tracker.dialationSteps[2] = self.signalHandeler.dialationStepsRed
             tracker.dialationSteps[3] = self.signalHandeler.dialationStepsBright
 
-            # Providing tracking threshhold data
-            tracker.threshholdRedMax = self.signalHandeler.threshholdRedMax
-            tracker.threshholdRedMin = self.signalHandeler.threshholdRedMin
+            # Providing tracking threshold data
+            tracker.thresholdRedMax = self.signalHandeler.thresholdRedMax
+            tracker.thresholdRedMin = self.signalHandeler.thresholdRedMin
 
-            tracker.threshholdGreenMax = self.signalHandeler.threshholdGreenMax
-            tracker.threshholdGreenMin = self.signalHandeler.threshholdGreenMin
+            tracker.thresholdGreenMax = self.signalHandeler.thresholdGreenMax
+            tracker.thresholdGreenMin = self.signalHandeler.thresholdGreenMin
 
-            tracker.threshholdBlueMax = self.signalHandeler.threshholdBlueMax
-            tracker.threshholdBlueMin = self.signalHandeler.threshholdBlueMin
+            tracker.thresholdBlueMax = self.signalHandeler.thresholdBlueMax
+            tracker.thresholdBlueMin = self.signalHandeler.thresholdBlueMin
 
-            tracker.threshholdBrightMax = self.signalHandeler.threshholdBrightMax
-            tracker.threshholdBrightMin = self.signalHandeler.threshholdBrightMin
+            tracker.thresholdBrightMax = self.signalHandeler.thresholdBrightMax
+            tracker.thresholdBrightMin = self.signalHandeler.thresholdBrightMin
             
             # Killing the cycle on the first round
             if kill == True:
@@ -93,20 +93,20 @@ class SignalHandeler(QObject):
         super().__init__()
         self.targetChannel = 0
         
-        self.threshholdRedMax = 255
-        self.threshholdRedMin = 230
+        self.thresholdRedMax = 255
+        self.thresholdRedMin = 230
         self.dialationStepsRed = 6
 
-        self.threshholdGreenMax = 255
-        self.threshholdGreenMin = 230
+        self.thresholdGreenMax = 255
+        self.thresholdGreenMin = 230
         self.dialationStepsGreen = 6
 
-        self.threshholdBlueMax = 255
-        self.threshholdBlueMin = 230
+        self.thresholdBlueMax = 255
+        self.thresholdBlueMin = 230
         self.dialationStepsBlue = 6
 
-        self.threshholdBrightMax = 255
-        self.threshholdBrightMin = 200
+        self.thresholdBrightMax = 255
+        self.thresholdBrightMin = 200
         self.dialationStepsBright = 6
 
         self.dropdownSelection = "final"
@@ -119,10 +119,10 @@ class SignalHandeler(QObject):
             "green image",
             "red image",
             "white image",
-            "threshholding blue",
-            "threshholding green",
-            "threshholding red",
-            "threshholding white",
+            "thresholding blue",
+            "thresholding green",
+            "thresholding red",
+            "thresholding white",
             "combination",
             "tracking image",
             "final"
@@ -150,50 +150,50 @@ class SignalHandeler(QObject):
 
     @Slot(str)
     def redSliderMaxSignal(self, incoming):
-        self.threshholdRedMax = round(float(incoming))
+        self.thresholdRedMax = round(float(incoming))
 
     @Slot(str)
     def redSliderMinSignal(self, incoming):
-        self.threshholdRedMin = round(float(incoming))
+        self.thresholdRedMin = round(float(incoming))
 
     @Slot(str)
-    def redSetDialation(self, incoming):
+    def redSetDilation(self, incoming):
         self.dialationStepsRed = int(incoming)
 
     @Slot(str)
     def greenSliderMaxSignal(self, incoming):
-        self.threshholdGreenMax = round(float(incoming))
+        self.thresholdGreenMax = round(float(incoming))
 
     @Slot(str)
     def greenSliderMinSignal(self, incoming):
-        self.threshholdGreenMin = round(float(incoming))
+        self.thresholdGreenMin = round(float(incoming))
 
     @Slot(str)
-    def greenSetDialation(self, incoming):
+    def greenSetDilation(self, incoming):
         self.dialationStepsGreen = int(incoming)
 
     @Slot(str)
     def blueSliderMaxSignal(self, incoming):
-        self.threshholdBlueMax = round(float(incoming))
+        self.thresholdBlueMax = round(float(incoming))
 
     @Slot(str)
     def blueSliderMinSignal(self, incoming):
-        self.threshholdBlueMin = round(float(incoming))
+        self.thresholdBlueMin = round(float(incoming))
 
     @Slot(str)
-    def blueSetDialation(self, incoming):
+    def blueSetDilation(self, incoming):
         self.dialationStepsBlue = int(incoming)
 
     @Slot(str)
     def brightSliderMaxSignal(self, incoming):
-        self.threshholdBrightMax = round(float(incoming))
+        self.thresholdBrightMax = round(float(incoming))
 
     @Slot(str)
     def brightSliderMinSignal(self, incoming):
-        self.threshholdBrightMin = round(float(incoming))
+        self.thresholdBrightMin = round(float(incoming))
 
     @Slot(str)
-    def brightSetDialation(self, incoming):
+    def brightSetDilation(self, incoming):
         self.dialationStepsBright = int(incoming)
 
 

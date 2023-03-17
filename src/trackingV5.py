@@ -23,17 +23,17 @@ class systemTrack:
         self.frame = None
         self.refined_components = []
 
-        self.threshholdRedMax = 255
-        self.threshholdRedMin = 230
+        self.thresholdRedMax = 255
+        self.thresholdRedMin = 230
 
-        self.threshholdGreenMax = 255
-        self.threshholdGreenMin = 230
+        self.thresholdGreenMax = 255
+        self.thresholdGreenMin = 230
 
-        self.threshholdBlueMax = 255
-        self.threshholdBlueMin = 230
+        self.thresholdBlueMax = 255
+        self.thresholdBlueMin = 230
 
-        self.threshholdBrightMax = 255
-        self.threshholdBrightMin = 200
+        self.thresholdBrightMax = 255
+        self.thresholdBrightMin = 200
 
         self.dialationSteps = [6, 6, 6, 6]
 
@@ -50,17 +50,17 @@ class systemTrack:
             "green image" : None,
             "red image" : None,
             "white image" : None,
-            "threshholding blue" : None,
-            "threshholding green" : None,
-            "threshholding red" : None,
-            "threshholding white" : None,
+            "thresholding blue" : None,
+            "thresholding green" : None,
+            "thresholding red" : None,
+            "thresholding white" : None,
             "combination" : None,
             "tracking image" : None,
             "final" : None
         }
 
     def mainCycle(self):
-        # Reading the frame displated by the system camera
+        # Reading the frame displayed by the system camera
         stream = self.video.read()
         frame = stream[1]
 
@@ -96,7 +96,7 @@ class systemTrack:
 
         # Applying mask with my own function
         if self.useMask == True:
-            maskedFrame = self.rectangualarMasking(frame, mCoordinates, mExtents, self.maskBuffer)
+            maskedFrame = self.rectangularMasking(frame, mCoordinates, mExtents, self.maskBuffer)
         else:
             maskedFrame = frame
 
@@ -135,54 +135,54 @@ class systemTrack:
 
     def componentProcessing(self, images, frame):
         # Threshholding (grayscale) white and target color channel images
-        threshholdBlueMin = cv2.threshold(images[0], self.threshholdBlueMin, 255, cv2.THRESH_BINARY)[1]
-        threshholdGreenMin = cv2.threshold(images[1], self.threshholdGreenMin, 255, cv2.THRESH_BINARY)[1]
-        threshholdRedMin = cv2.threshold(images[2], self.threshholdRedMin, 255, cv2.THRESH_BINARY)[1]
+        thresholdBlueMin = cv2.threshold(images[0], self.thresholdBlueMin, 255, cv2.THRESH_BINARY)[1]
+        thresholdGreenMin = cv2.threshold(images[1], self.thresholdGreenMin, 255, cv2.THRESH_BINARY)[1]
+        thresholdRedMin = cv2.threshold(images[2], self.thresholdRedMin, 255, cv2.THRESH_BINARY)[1]
 
-        threshholdWhiteMin = cv2.threshold(images[3], self.threshholdBrightMin, 255, cv2.THRESH_BINARY)[1]
+        thresholdWhiteMin = cv2.threshold(images[3], self.thresholdBrightMin, 255, cv2.THRESH_BINARY)[1]
 
-        threshholdBlueMax = cv2.threshold(images[0], self.threshholdBlueMax, 255, cv2.THRESH_BINARY)[1]
-        threshholdGreenMax = cv2.threshold(images[1], self.threshholdGreenMax, 255, cv2.THRESH_BINARY)[1]
-        threshholdRedMax = cv2.threshold(images[2], self.threshholdRedMax, 255, cv2.THRESH_BINARY)[1]
+        thresholdBlueMax = cv2.threshold(images[0], self.thresholdBlueMax, 255, cv2.THRESH_BINARY)[1]
+        thresholdGreenMax = cv2.threshold(images[1], self.thresholdGreenMax, 255, cv2.THRESH_BINARY)[1]
+        thresholdRedMax = cv2.threshold(images[2], self.thresholdRedMax, 255, cv2.THRESH_BINARY)[1]
 
-        threshholdWhiteMax = cv2.threshold(images[3], self.threshholdBrightMax, 255, cv2.THRESH_BINARY)[1]
+        thresholdWhiteMax = cv2.threshold(images[3], self.thresholdBrightMax, 255, cv2.THRESH_BINARY)[1]
 
-        threshholdBlue = threshholdBlueMin - threshholdBlueMax
-        threshholdGreen = threshholdGreenMin - threshholdGreenMax
-        threshholdRed = threshholdRedMin - threshholdRedMax
+        thresholdBlue = thresholdBlueMin - thresholdBlueMax
+        thresholdGreen = thresholdGreenMin - thresholdGreenMax
+        thresholdRed = thresholdRedMin - thresholdRedMax
 
-        threshholdWhite = threshholdWhiteMin - threshholdWhiteMax
+        thresholdWhite = thresholdWhiteMin - thresholdWhiteMax
 
-        threshholds = [threshholdBlue, threshholdGreen, threshholdRed, threshholdWhite]
-        threshhold = threshholds[self.targetChannel]
+        thresholds = [thresholdBlue, thresholdGreen, thresholdRed, thresholdWhite]
+        threshold = thresholds[self.targetChannel]
 
-        # Subtracting white threshhold to avoid tracking bright lights maxing out all BGR channels
+        # Subtracting white threshold to avoid tracking bright lights maxing out all BGR channels
         if not self.targetChannel == 3:
-            for i, currentThreshhold in enumerate(threshholds):
-                if not np.array_equiv(threshholds[self.targetChannel], currentThreshhold):
+            for i, currentThreshhold in enumerate(thresholds):
+                if not np.array_equiv(thresholds[self.targetChannel], currentThreshhold):
                     currentThreshhold = cv2.dilate(currentThreshhold, None, iterations = self.dialationSteps[i])
-                    threshholds[i] = currentThreshhold
+                    thresholds[i] = currentThreshhold
 
-                    threshhold -= (currentThreshhold)
+                    threshold -= (currentThreshhold)
 
-        self.frameHistory["threshholding blue"] = threshholdBlue # threshholds[0]
-        self.frameHistory["threshholding green"] = threshholdGreen # threshholds[1]
-        self.frameHistory["threshholding red"] = threshholdRed # threshholds[2]
+        self.frameHistory["thresholding blue"] = thresholdBlue # thresholds[0]
+        self.frameHistory["thresholding green"] = thresholdGreen # thresholds[1]
+        self.frameHistory["thresholding red"] = thresholdRed # thresholds[2]
 
-        self.frameHistory["threshholding white"] = threshholds[3]
+        self.frameHistory["thresholding white"] = thresholds[3]
 
-        self.frameHistory["combination"] = threshhold
+        self.frameHistory["combination"] = threshold
 
         # using cv2 morphology to remove noise and small light sources (e.g. reflections)
-        threshhold = cv2.morphologyEx(threshhold, cv2.MORPH_OPEN, None, iterations=self.erosionSteps)
+        threshold = cv2.morphologyEx(threshold, cv2.MORPH_OPEN, None, iterations=self.erosionSteps)
 
-        self.frameHistory["tracking image"] = threshhold
+        self.frameHistory["tracking image"] = threshold
 
-        # re-threshholding the processed image to purify the white output and avoid possible dark connecting islands
-        threshhold = cv2.threshold(threshhold, 200, 255, cv2.THRESH_BINARY)[1] # REMOVED FOR TESTING PUROPSES
+        # re-thresholding the processed image to purify the white output and avoid possible dark connecting islands
+        threshold = cv2.threshold(threshold, 200, 255, cv2.THRESH_BINARY)[1]
         
-        # Letting OpenCV recognise the white islands left by previous operations
-        connected_components_stats = cv2.connectedComponentsWithStats(threshhold, 1, cv2.CV_32S)  # Note: Adjust algorithm
+        # Letting OpenCV recognize the white islands left by previous operations
+        connected_components_stats = cv2.connectedComponentsWithStats(threshold, 1, cv2.CV_32S)  # Note: Adjust algorithm
 
         # Getting statistics about those islands
         components = connected_components_stats[2]
@@ -206,8 +206,8 @@ class systemTrack:
 
         return refined_components
 
-    def rectangualarMasking(self, frame, coordinates, extents, buffer):
-        # Initialising mask
+    def rectangularMasking(self, frame, coordinates, extents, buffer):
+        # Initializing mask
         mask = np.zeros(frame.shape[:2], dtype="uint8")
 
         # Setting up the mask with coordinates, radius, color and invert

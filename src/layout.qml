@@ -159,11 +159,11 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 value: 6
 
-                                onValueChanged: signalHandeler.redSetDialation(value)
+                                onValueChanged: signalHandeler.redSetDilation(value)
 
                                 ToolTip {
                                     visible: redDialSpinBox.hovered
-                                    text: 'Dialation'
+                                    text: 'Dilation'
                                 }
                             }
                         }    
@@ -264,11 +264,11 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 value: 6
 
-                                onValueChanged: signalHandeler.greenSetDialation(value)
+                                onValueChanged: signalHandeler.greenSetDilation(value)
 
                                 ToolTip {
                                     visible: grenenDialSpinBox.hovered
-                                    text: 'Dialation'
+                                    text: 'Dilation'
                                 }
                             }
                         }    
@@ -371,11 +371,11 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 value: 6
 
-                                onValueChanged: signalHandeler.blueSetDialation(value)
+                                onValueChanged: signalHandeler.blueSetDilation(value)
 
                                 ToolTip {
                                     visible: blueDialSpinBox.hovered
-                                    text: 'Dialation'
+                                    text: 'Dilation'
                                 }
                             }
                         }    
@@ -480,11 +480,11 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 value: 6
 
-                                onValueChanged: signalHandeler.brightSetDialation(value)
+                                onValueChanged: signalHandeler.brightSetDilation(value)
 
                                 ToolTip {
                                     visible: brightDialSpinBox.hovered
-                                    text: 'Dialation'
+                                    text: 'Dilation'
                                 }
                             }
                         }    
@@ -533,10 +533,10 @@ ApplicationWindow {
                                     "green image",
                                     "red image",
                                     "white image",
-                                    "threshholding blue",
-                                    "threshholding green",
-                                    "threshholding red",
-                                    "threshholding white",
+                                    "thresholding blue",
+                                    "thresholding green",
+                                    "thresholding red",
+                                    "thresholding white",
                                     "combination",
                                     "tracking image",
                                     "final"                
