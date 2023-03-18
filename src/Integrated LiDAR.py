@@ -14,7 +14,7 @@ class LiDAR:
         # ===== LiDAR constants ===================================
     
         # MAX: 65536 due to int16 matrix || Should be between 600 - 7200 || 1200 samples is ideal / good enough
-        self.SAMPLE_RATE = round(3600 / 3)
+        self.SAMPLE_RATE = round(3600 / 2)
 
         # ===== Processing constants ==============================
         
@@ -26,18 +26,18 @@ class LiDAR:
         self.MAX_DISTANCE_METERS = 2
 
         # Steps of primary dilation and secondary morphology close
-        self.DILATION_STEPS = 2
-        self.MORPHOLOGY_STEPS = 4
+        self.DILATION_STEPS = 1
+        self.MORPHOLOGY_STEPS = 2
 
         # Dilation and morphology kernels
-        self.DILATION_KERNEL = np.ones((2, 2), np.uint8) 
-        self.MORPH_KERNEL = np.ones((3, 3), np.uint8)
+        self.DILATION_KERNEL = np.ones((3, 3), np.uint8) 
+        self.MORPH_KERNEL = np.ones((7, 7), np.uint8)
 
         # Minimal area for processing
-        self.AREA_THRESHOLD = 10
+        self.AREA_THRESHOLD = 4
 
         # Minimal amount of scans in matrix grid square
-        self.THRESHOLD_SCANS_PROCESSING = 10
+        self.THRESHOLD_SCANS_PROCESSING = 1
 
 
         # ===== UI constants ======================================
@@ -46,7 +46,7 @@ class LiDAR:
         self.COLOR_MAP = 'plasma'
 
         # Minimal amount of scans in matrix grid square for the UI
-        self.DISPLAY_THRESHOLD = 1
+        self.DISPLAY_THRESHOLD = 3
 
         
         # ===== LiDAR setup =======================================
@@ -82,6 +82,7 @@ class LiDAR:
         self.fig = plt.figure()
         self.matrixVisualization = self.fig.add_subplot()
 
+
     def update(self):
         self.graphing()
 
@@ -100,10 +101,8 @@ class LiDAR:
     def scan(self):
         global graphingMatrix
 
-        # Starting the LiDAR data handlerMATRIX_DILATION
+        # Starting the LiDAR data handler MATRIX_DILATION
         handler = self.lidar.start_scan_express(2)
-
-        print('past')
 
         max_x = self.MAX_DISTANCE_METERS / np.cos(np.pi / 4)
         max_y = self.MAX_DISTANCE_METERS / np.sin(np.pi / 4)
@@ -132,48 +131,47 @@ class LiDAR:
 
                 if count == self.SAMPLE_RATE: break
 
+            print('==NEXT======================================NEXT==')
+
+            LiDARcomponents = []
+            
+            # Making matrix binary and getting individual components
+            processingMatrix = (matrix >= self.THRESHOLD_SCANS_PROCESSING).astype(np.uint8)
+            processingMatrix = cv2.morphologyEx(processingMatrix, cv2.MORPH_CLOSE, self.MORPH_KERNEL, iterations=self.MORPHOLOGY_STEPS)
+            processingMatrix = cv2.dilate(processingMatrix, self.DILATION_KERNEL, iterations=self.DILATION_STEPS)
+
+            # Generating connected components with OpenCV spaghetti algorithm
+            connectedLiDAR = cv2.connectedComponentsWithStats(processingMatrix, 1, cv2.CV_32S)
+
+            # Getting individual components from LiDAR scan        
+            components = connectedLiDAR[2]
+            totalComponents = connectedLiDAR[0]
+
+            for i in range(totalComponents - 1):
+                if components[i + 1, cv2.CC_STAT_AREA] >= self.AREA_THRESHOLD:
+                    component = {
+                        'index'     : i,
+                        'x'         : components[i + 1, cv2.CC_STAT_LEFT],
+                        'y'         : components[i + 1, cv2.CC_STAT_TOP],
+                        'width'     : components[i + 1, cv2.CC_STAT_WIDTH],
+                        'height'    : components[i + 1, cv2.CC_STAT_HEIGHT],
+                        'area'      : components[i + 1, cv2.CC_STAT_AREA],
+                        'matrix'    : (connectedLiDAR[1] == i).astype(np.uint8)
+                    }
+                    
+                    LiDARcomponents.append(component)
+
+                    print('I: %s || x: %s || y: %s || a: %s' %(component['index'], component['x'], component['y'], component['area']))
+
             with self.matrix_lock:
-                print('==NEXT======================================NEXT==')
+                self.graphingMatrix = processingMatrix
 
-                LiDARcomponents = []
-                secondaryTime = time.time()
-                
-                # Dilating and thresholding matrix for user interface || Helpful with large resolutions
-                self.graphingMatrix[matrix < self.DISPLAY_THRESHOLD] = 0
-                
-                # Making matrix binary and getting individual components
-                processingMatrix = (matrix > 0).astype(np.uint8)
-                processingMatrix = cv2.dilate(processingMatrix, self.DILATION_KERNEL, iterations=self.DILATION_STEPS)
-                processingMatrix = cv2.morphologyEx(processingMatrix, cv2.MORPH_CLOSE, self.MORPH_KERNEL, iterations=self.MORPHOLOGY_STEPS)
-
-                # Generating connected components with OpenCV spaghetti algorithm
-                connectedLiDAR = cv2.connectedComponentsWithStats(processingMatrix, 1, cv2.CV_32S)
-
-                # Getting individual components from LiDAR scan        
-                components = connectedLiDAR[2]
-                totalComponents = connectedLiDAR[0]
-
-                self.graphingMatrix = connectedLiDAR[1] # (connectedLiDAR[1] == 2).astype(np.uint8)
-
-                for i in range(totalComponents - 1):
-                    if components[i + 1, cv2.CC_STAT_AREA] >= self.AREA_THRESHOLD:
-                        component = {
-                            'index'     : i,
-                            'x'         : components[i + 1, cv2.CC_STAT_LEFT],
-                            'y'         : components[i + 1, cv2.CC_STAT_TOP],
-                            'width'     : components[i + 1, cv2.CC_STAT_WIDTH],
-                            'height'    : components[i + 1, cv2.CC_STAT_HEIGHT],
-                            'area'      : components[i + 1, cv2.CC_STAT_AREA],
-                            'matrix'    : (connectedLiDAR[1] == i).astype(np.uint8)
-                        }
-                        
-                        LiDARcomponents.append(component)
-
-                        print('I: %s || x: %s || y: %s || a: %s' %(component['index'], component['x'], component['y'], component['area']))
+                # Thresholding matrix for user interface || Helpful with large resolutions
+                # self.graphingMatrix[matrix < self.DISPLAY_THRESHOLD] = 0
 
                 # Printing delta time
+                secondaryTime = time.time()
                 print('Delta Time: %ss' %(format((secondaryTime - primaryTime), '.2f')))
-
 
 currentLiDAR = LiDAR()
 
