@@ -39,6 +39,9 @@ class LiDAR:
         # Minimal amount of scans in matrix grid square
         self.THRESHOLD_SCANS_PROCESSING = 1
 
+        # How similar do two matrices have to be to be considered one?
+        # NOTE: Implement WEIGHT!
+        self.MAX_MATRIX_DIFFERENCE = 2
 
         # ===== UI constants ======================================
 
@@ -77,10 +80,15 @@ class LiDAR:
 
         # Setting up the graphing matrix
         self.graphingMatrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X))
-    
+
         # Setting up the plot for the LiDAR visualization
         self.fig = plt.figure()
         self.matrixVisualization = self.fig.add_subplot()
+
+
+        # ===== General setup =====================================
+
+        self.history = []
 
 
     def update(self):
@@ -161,10 +169,12 @@ class LiDAR:
                     
                     LiDARcomponents.append(component)
 
-                    print('I: %s || x: %s || y: %s || a: %s' %(component['index'], component['x'], component['y'], component['area']))
+                    # print('I: %s || x: %s || y: %s || a: %s' %(component['index'], component['x'], component['y'], component['area']))
+
+            self.filter(LiDARcomponents)
 
             with self.matrix_lock:
-                self.graphingMatrix = processingMatrix
+                self.graphingMatrix = connectedLiDAR[1]
 
                 # Thresholding matrix for user interface || Helpful with large resolutions
                 # self.graphingMatrix[matrix < self.DISPLAY_THRESHOLD] = 0
@@ -172,6 +182,61 @@ class LiDAR:
                 # Printing delta time
                 secondaryTime = time.time()
                 print('Delta Time: %ss' %(format((secondaryTime - primaryTime), '.2f')))
+
+    def filter(self, components):
+        stepArray = []
+        subStepArray = []
+
+        for component in components:
+            componentMatrix = np.array([
+                component['index'],
+                component['x'],
+                component['y'],
+                component['width'],
+                component['height'],
+                component['area']
+                ])
+            
+            stepArray.append(componentMatrix)
+
+            if len(self.history) > 0:
+                filterArray = []
+
+                for historicalMatrix in self.history[-1]:
+                    # Subtract the historical matrix from the current one; The smaller the value, the more similar they are!
+                    # NOTE: Implement WEIGHT for the individual components!!!
+                    bufferArray = np.abs(componentMatrix - historicalMatrix)
+
+                    mean = np.fix(np.mean(bufferArray))
+                    appendArray = np.array([historicalMatrix[0], mean])
+
+                    filterArray.append(appendArray)
+
+                # Sort the filterArray value, while keeping the index. In this case the sortedArray represents how similar each historicalMatrix is to the current one!
+                filterArray = np.array(filterArray)
+                sortedIndices = np.argsort(filterArray[:, 1])
+                sortedArray = filterArray[sortedIndices]
+
+                componentMatrix[0] = sortedArray[0, 0]
+                subStepArray.append(componentMatrix)
+
+        if len(subStepArray) > 0:
+            sortedSubStepArray = np.zeros((len(subStepArray), 6))
+
+            subStepArray = np.array(subStepArray)
+            sortedIndices = np.argsort(subStepArray[0])
+
+            for i in sortedIndices:
+                if i < len(subStepArray):
+                    sortedSubStepArray[i] = subStepArray[i]
+
+            print(sortedSubStepArray)
+
+        # Avoid using too much memory, popping history.
+        if len(self.history) >= 10:
+            self.history.pop()
+        
+        self.history.append(stepArray)
 
 currentLiDAR = LiDAR()
 

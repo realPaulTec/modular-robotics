@@ -54,7 +54,7 @@ graphingMatrix = np.zeros((RESOLUTION_Y, RESOLUTION_X))
 # Setting up the plot for the LiDAR visualisation
 fig = plt.figure()
 axis = fig.add_subplot(121, projection = 'polar')
-matrixVisualisation = fig.add_subplot(121)
+matrixVisualisation = fig.add_subplot(122)
 
 # Setting up thread locks for thread synchronysation
 distance_lock = threading.Lock()
