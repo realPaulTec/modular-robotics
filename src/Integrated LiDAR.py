@@ -41,7 +41,7 @@ class LiDAR:
 
         # How similar do two matrices have to be to be considered one?
         # NOTE: Implement WEIGHT!
-        self.MAX_MATRIX_DIFFERENCE = 2
+        self.MAX_MATRIX_DIFFERENCE = 6
 
         # ===== UI constants ======================================
 
@@ -233,26 +233,18 @@ class LiDAR:
                 stepArray.append(np.array([historicalMatrix[0], sortedArray[0, 0], sortedArray[0, 1]]))
         
         stepArray = np.array(stepArray)
-        print(stepArray)
-        
-        # finalMatrix = np.zeros(len(componentMatrices), 6))
-        # orphanMatrices = []
+
+        print('histArray: %s' %len(self.history[-1]))
+        print('compArray: %s' %len(components))
+        print('stepArray: %s' %len(stepArray))
+
         # for i, component in enumerate(componentMatrices):
         #     indices = np.where(stepArray[:, 1] == component[0])[0]
-
-        #     if len(indices) == 1:
-        #         currentComponent = stepArray[int(indices)] 
-
-        #         print(currentComponent)
-
-        #         finalMatrix[currentComponent[0]] = currentComponent
-                
-        #         # print(stepArray[indices])
-
+    
         self.history.append(componentMatrices)
 
         if len(self.history) >= 10:
-            self.history.pop()
+            self.history.pop(0)
 
         # for component in components:
         #     componentMatrix = np.array([
