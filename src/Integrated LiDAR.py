@@ -19,29 +19,29 @@ class LiDAR:
         # ===== Processing constants ==============================
         
         # Resolution should be an uneven number
-        self.RESOLUTION_X = 155
-        self.RESOLUTION_Y = 155
+        self.RESOLUTION_X = 85
+        self.RESOLUTION_Y = 85
 
         # Setting the max distance
         self.MAX_DISTANCE_METERS = 2
 
         # Steps of primary dilation and secondary morphology close
         self.DILATION_STEPS = 1
-        self.MORPHOLOGY_STEPS = 2
+        self.MORPHOLOGY_STEPS = 1
 
         # Dilation and morphology kernels
         self.DILATION_KERNEL = np.ones((3, 3), np.uint8) 
-        self.MORPH_KERNEL = np.ones((7, 7), np.uint8)
+        self.MORPH_KERNEL = np.ones((5, 5), np.uint8)
 
         # Minimal area for processing
         self.AREA_THRESHOLD = 4
 
         # Minimal amount of scans in matrix grid square
-        self.THRESHOLD_SCANS_PROCESSING = 1
+        self.THRESHOLD_SCANS_PROCESSING = 2
 
         # How similar do two matrices have to be to be considered one?
         # NOTE: Implement WEIGHT!
-        self.MAX_MATRIX_DIFFERENCE = 6
+        self.MAX_MATRIX_DIFFERENCE = 4
 
         # ===== UI constants ======================================
 
@@ -89,14 +89,20 @@ class LiDAR:
         # ===== General setup =====================================
 
         self.history = []
+    
+        max_x = self.MAX_DISTANCE_METERS / np.cos(np.pi / 4)
+        max_y = self.MAX_DISTANCE_METERS / np.sin(np.pi / 4)
+        self.max_x_y = max(max_x, max_y) * 1000
 
 
     def update(self):
         self.graphing()
 
+
     def on_exit(self):
         self.lidar.set_motor_pwm(0)
         self.lidar.disconnect()
+
 
     def graphing(self):
         # Graphing the LiDAR output
@@ -106,102 +112,125 @@ class LiDAR:
 
         plt.pause(0.01)
 
+
     def scan(self):
         global graphingMatrix
 
-        # Starting the LiDAR data handler MATRIX_DILATION
+        # Starting the LiDAR data handler.
         handler = self.lidar.start_scan_express(2)
 
-        max_x = self.MAX_DISTANCE_METERS / np.cos(np.pi / 4)
-        max_y = self.MAX_DISTANCE_METERS / np.sin(np.pi / 4)
-        max_x_y = max(max_x, max_y) * 1000
-
         while True: 
-            matrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X)).astype(np.int16)
+            # Getting first time for Δt in seconds.
             primaryTime = time.time()
+
+            # Resetting matrix for new scan.
+            matrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X)).astype(np.int16)
             
-            # Processing the data from the LiDAR
+            # Processing the data from the LiDAR in a handler from the PyRPlidar library!
             for count, scan in enumerate(handler()):
-                if scan.distance != 0 and scan.distance < max_x_y:
-                    primary_x = np.cos(np.deg2rad(scan.angle)) * (scan.distance / 1000)
-                    primary_y = np.sin(np.deg2rad(scan.angle)) * (scan.distance / 1000)
 
-                    # print('x: %s || y: %s' %(primary_x, primary_y))
-
-                    if np.abs(primary_x) < self.MAX_DISTANCE_METERS and np.abs(primary_y) < self.MAX_DISTANCE_METERS:
-                        x = np.round(primary_x / self.MAX_DISTANCE_METERS * ((self.RESOLUTION_X - 1) / 2)).astype(np.int16)
-                        y = np.round(primary_y / self.MAX_DISTANCE_METERS * ((self.RESOLUTION_Y - 1) / 2)).astype(np.int16)
-                    
-                        index_x = np.round(self.RESOLUTION_X / 2).astype(np.int16) + x - 1
-                        index_y = np.round(self.RESOLUTION_Y / 2).astype(np.int16) + y - 1
-
-                        matrix[index_x, index_y] += 1
-
+                # Quick distance approximation for performance reasons. || Don't want to run trigonometric functions if they aren't necessary!
+                if scan.distance != 0 and scan.distance < self.max_x_y:
+                    matrix = self.get_scan_matrix(matrix, scan)
+                
+                # Breaking for loop after surpassing set sample rate.
                 if count == self.SAMPLE_RATE: break
 
             print('==NEXT======================================NEXT==')
 
-            LiDARcomponents = []
+            # Processing the scan & getting the processed matrix. 
+            matrix = self.process_scan(matrix)
+
+            # Printing Δt in seconds.
+            secondaryTime = time.time()
+            print('Delta Time: %ss' %(format((secondaryTime - primaryTime), '.2f')))
+
+    def get_scan_matrix(self, matrix, scan):
+        # Getting hit coordinates relative to LiDAR position in meters!
+        primary_x = np.cos(np.deg2rad(scan.angle)) * (scan.distance / 1000)
+        primary_y = np.sin(np.deg2rad(scan.angle)) * (scan.distance / 1000)
+
+        # Only calculating matrix indices if they are within the max. bounds.
+        if np.abs(primary_x) < self.MAX_DISTANCE_METERS and np.abs(primary_y) < self.MAX_DISTANCE_METERS:
+            # Getting indices in matrix for coordinates, relative to the center coordinate.
+            x = np.round(primary_x / self.MAX_DISTANCE_METERS * ((self.RESOLUTION_X - 1) / 2)).astype(np.int16)
+            y = np.round(primary_y / self.MAX_DISTANCE_METERS * ((self.RESOLUTION_Y - 1) / 2)).astype(np.int16)
+           
+            # Getting absolute grid coordinate in matrix
+            index_x = np.round(self.RESOLUTION_X / 2).astype(np.int16) + x - 1
+            index_y = np.round(self.RESOLUTION_Y / 2).astype(np.int16) + y - 1
+
+            # Adding one scan to the matrix grd square.
+            matrix[index_x, index_y] += 1
+
+        return matrix
+
+
+    def process_scan(self, matrix):
+        LiDARcomponents = []
             
-            # Making matrix binary and getting individual components
-            processingMatrix = (matrix >= self.THRESHOLD_SCANS_PROCESSING).astype(np.uint8)
-            processingMatrix = cv2.morphologyEx(processingMatrix, cv2.MORPH_CLOSE, self.MORPH_KERNEL, iterations=self.MORPHOLOGY_STEPS)
-            processingMatrix = cv2.dilate(processingMatrix, self.DILATION_KERNEL, iterations=self.DILATION_STEPS)
+        # Making matrix binary and getting individual components
+        processingMatrix = (matrix >= self.THRESHOLD_SCANS_PROCESSING).astype(np.uint8)
+        processingMatrix = cv2.morphologyEx(processingMatrix, cv2.MORPH_CLOSE, self.MORPH_KERNEL, iterations=self.MORPHOLOGY_STEPS)
+        processingMatrix = cv2.dilate(processingMatrix, self.DILATION_KERNEL, iterations=self.DILATION_STEPS)
 
-            # Generating connected components with OpenCV spaghetti algorithm
-            connectedLiDAR = cv2.connectedComponentsWithStats(processingMatrix, 1, cv2.CV_32S)
+        # Generating connected components with OpenCV spaghetti algorithm
+        connectedLiDAR = cv2.connectedComponentsWithStats(processingMatrix, 1, cv2.CV_32S)
 
-            # Getting individual components from LiDAR scan        
-            components = connectedLiDAR[2]
-            totalComponents = connectedLiDAR[0]
+        # Getting individual components from LiDAR scan        
+        components = connectedLiDAR[2]
+        totalComponents = connectedLiDAR[0]
 
-            for i in range(totalComponents - 1):
-                if components[i + 1, cv2.CC_STAT_AREA] >= self.AREA_THRESHOLD:
-                    component = {
-                        'index'     : i,
-                        'x'         : components[i + 1, cv2.CC_STAT_LEFT],
-                        'y'         : components[i + 1, cv2.CC_STAT_TOP],
-                        'width'     : components[i + 1, cv2.CC_STAT_WIDTH],
-                        'height'    : components[i + 1, cv2.CC_STAT_HEIGHT],
-                        'area'      : components[i + 1, cv2.CC_STAT_AREA],
-                        'matrix'    : (connectedLiDAR[1] == i).astype(np.uint8)
-                    }
-                    
-                    LiDARcomponents.append(component)
+        # Making a dictionary of the components. NOTE: Change to np.array for performance reasons.
+        for i in range(totalComponents - 1):
+            if components[i + 1, cv2.CC_STAT_AREA] >= self.AREA_THRESHOLD:
+                component = {
+                    'index'     : i,
+                    'x'         : components[i + 1, cv2.CC_STAT_LEFT],
+                    'y'         : components[i + 1, cv2.CC_STAT_TOP],
+                    'width'     : components[i + 1, cv2.CC_STAT_WIDTH],
+                    'height'    : components[i + 1, cv2.CC_STAT_HEIGHT],
+                    'area'      : components[i + 1, cv2.CC_STAT_AREA],
+                    'matrix'    : (connectedLiDAR[1] == i).astype(np.uint8)
+                }
+                
+                LiDARcomponents.append(component)
 
-                    # print('I: %s || x: %s || y: %s || a: %s' %(component['index'], component['x'], component['y'], component['area']))
+                # print('I: %s || x: %s || y: %s || a: %s' %(component['index'], component['x'], component['y'], component['area']))
 
-            if len(self.history) > 0:
-                self.filter(LiDARcomponents)
-            else:
-                stepArray = []
+        # Filtering the LiDAR components, compared to their historical counterparts. 
+        if len(self.history) > 0:
+            self.filter(LiDARcomponents)
 
-                for component in LiDARcomponents:
-                    componentMatrix = np.array([
-                        component['index'],
-                        component['x'],
-                        component['y'],
-                        component['width'],
-                        component['height'],
-                        component['area']
-                    ])
+        # On the first run, the history will be appended from the process_scan function.
+        else:
+            stepArray = []
 
-                    stepArray.append(componentMatrix)
+            # Appending all components to dictionary NOTE: Could easily do this in the components loop 
+            for component in LiDARcomponents:
+                componentMatrix = np.array([
+                    component['index'],
+                    component['x'],
+                    component['y'],
+                    component['width'],
+                    component['height'],
+                    component['area']
+                ])
 
-                self.history.append(np.array(stepArray))
+                stepArray.append(componentMatrix)
 
-            with self.matrix_lock:
-                self.graphingMatrix = connectedLiDAR[1]
+            self.history.append(np.array(stepArray))
 
-                # Printing delta time
-                secondaryTime = time.time()
-                print('Delta Time: %ss' %(format((secondaryTime - primaryTime), '.2f')))
+        # Synchronizing with main thread and graphing the matrix in matplotlib. 
+        with self.matrix_lock:
+            self.graphingMatrix = connectedLiDAR[1]
 
 
     def filter(self, components):
         componentMatrices = []
         stepArray = []
 
+        # Appending all components, represented as matrices to the componentMatrices array.
         for component in components:
             componentMatrix = np.array([
                 component['index'],
@@ -214,6 +243,7 @@ class LiDAR:
 
             componentMatrices.append(componentMatrix)
 
+        # Checking which new matrix is the closest to a historical matrix.
         for historicalMatrix in self.history[-1]:
             filterArray = []
 
@@ -228,15 +258,17 @@ class LiDAR:
             filterArray = np.array(filterArray)
             sortedIndices = np.argsort(filterArray[:, 1])
             sortedArray = filterArray[sortedIndices]
-            
+
+            # For the arrays to be seen as the same, the median of their differences must be below a certain threshold.
             if sortedArray[0, 1] <= self.MAX_MATRIX_DIFFERENCE:
                 stepArray.append(np.array([historicalMatrix[0], sortedArray[0, 0], sortedArray[0, 1]]))
         
         stepArray = np.array(stepArray)
+        print(stepArray)
 
-        print('histArray: %s' %len(self.history[-1]))
-        print('compArray: %s' %len(components))
-        print('stepArray: %s' %len(stepArray))
+        # print('histArray: %s' %len(self.history[-1]))
+        # print('compArray: %s' %len(components))
+        # print('stepArray: %s' %len(stepArray))
 
         # for i, component in enumerate(componentMatrices):
         #     indices = np.where(stepArray[:, 1] == component[0])[0]
@@ -246,64 +278,6 @@ class LiDAR:
         if len(self.history) >= 10:
             self.history.pop(0)
 
-        # for component in components:
-        #     componentMatrix = np.array([
-        #         component['index'],
-        #         component['x'],
-        #         component['y'],
-        #         component['width'],
-        #         component['height'],
-        #         component['area']
-        #         ])
-            
-        #     stepArray.append(componentMatrix)
-
-        #     if len(self.history) > 0:
-        #         filterArray = []
-
-        #         for historicalMatrix in self.history[-1]:
-        #             # Subtract the historical matrix from the current one; The smaller the value, the more similar they are!
-        #             # NOTE: Implement WEIGHT for the individual components!!!
-        #             bufferArray = np.abs(componentMatrix - historicalMatrix)
-
-        #             mean = np.fix(np.mean(bufferArray))
-        #             appendArray = np.array([historicalMatrix[0], mean])
-
-        #             filterArray.append(appendArray)
-
-        #         # Sort the filterArray value, while keeping the index. In this case the sortedArray represents how similar each historicalMatrix is to the current one!
-        #         filterArray = np.array(filterArray)
-        #         sortedIndices = np.argsort(filterArray[:, 1])
-        #         sortedArray = filterArray[sortedIndices]
-
-        #         # if sortedArray[0, 0] <= self.MAX_MATRIX_DIFFERENCE:
-        #         print('Difference: %s' %sortedArray[0, 0])
-        #         componentMatrix[0] = sortedArray[0, 0]
-
-        #         # NOTE: Reduce duplicate 'closest arrays' by checking which one is actually the closest! Also the one which is not close will be given an index outside the current bounds.
-    
-        #         subStepArray.append(componentMatrix)
-
-        # if len(subStepArray) > 0:
-        #     sortedSubStepArray = np.zeros((len(subStepArray), 6))
-
-        #     subStepArray = np.array(subStepArray)
-        #     sortedIndices = np.argsort(subStepArray[0])
-
-        #     print('Indices: %s' %len(sortedIndices))
-        #     print('SSArr: %s' %len(subStepArray))
-
-        #     for i in sortedIndices:
-        #         if i < len(subStepArray):
-        #             sortedSubStepArray[i] = subStepArray[i]
-
-        #     print(subStepArray)
-
-        # Avoid using too much memory, popping history.
-        # if len(self.history) >= 10:
-        #     self.history.pop()
-        
-        # self.history.append(stepArray)
 
 currentLiDAR = LiDAR()
 
