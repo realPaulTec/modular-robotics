@@ -145,6 +145,7 @@ class LiDAR:
             secondaryTime = time.time()
             print('Delta Time: %ss' %(format((secondaryTime - primaryTime), '.2f')))
 
+
     def get_scan_matrix(self, matrix, scan):
         # Getting hit coordinates relative to LiDAR position in meters!
         primary_x = np.cos(np.deg2rad(scan.angle)) * (scan.distance / 1000)
@@ -168,6 +169,7 @@ class LiDAR:
 
     def process_scan(self, matrix):
         LiDARcomponents = []
+        LiDARmatrices = []
             
         # Making matrix binary and getting individual components
         processingMatrix = (matrix >= self.THRESHOLD_SCANS_PROCESSING).astype(np.uint8)
@@ -184,19 +186,22 @@ class LiDAR:
         # Making a dictionary of the components. NOTE: Change to np.array for performance reasons.
         for i in range(totalComponents - 1):
             if components[i + 1, cv2.CC_STAT_AREA] >= self.AREA_THRESHOLD:
-                component = {
-                    'index'     : i,
-                    'x'         : components[i + 1, cv2.CC_STAT_LEFT],
-                    'y'         : components[i + 1, cv2.CC_STAT_TOP],
-                    'width'     : components[i + 1, cv2.CC_STAT_WIDTH],
-                    'height'    : components[i + 1, cv2.CC_STAT_HEIGHT],
-                    'area'      : components[i + 1, cv2.CC_STAT_AREA],
-                    'matrix'    : (connectedLiDAR[1] == i).astype(np.uint8)
-                }
+                component = np.array([
+                    i,                                          # Index | Acts as ID
+                    components[i + 1, cv2.CC_STAT_LEFT],        # x coordinate
+                    components[i + 1, cv2.CC_STAT_TOP],         # y coordinate
+                    components[i + 1, cv2.CC_STAT_WIDTH],       # Width
+                    components[i + 1, cv2.CC_STAT_HEIGHT],      # Height
+                    components[i + 1, cv2.CC_STAT_AREA],        # Area
+                ])
                 
                 LiDARcomponents.append(component)
+                LiDARmatrices.append([
+                    i,                                          # Index
+                    (connectedLiDAR[1] == i).astype(np.uint8)   # Matrix
+                ])
 
-                # print('I: %s || x: %s || y: %s || a: %s' %(component['index'], component['x'], component['y'], component['area']))
+        LiDARcomponents = np.array(LiDARcomponents)
 
         # Filtering the LiDAR components, compared to their historical counterparts. 
         if len(self.history) > 0:
@@ -204,22 +209,7 @@ class LiDAR:
 
         # On the first run, the history will be appended from the process_scan function.
         else:
-            stepArray = []
-
-            # Appending all components to dictionary NOTE: Could easily do this in the components loop 
-            for component in LiDARcomponents:
-                componentMatrix = np.array([
-                    component['index'],
-                    component['x'],
-                    component['y'],
-                    component['width'],
-                    component['height'],
-                    component['area']
-                ])
-
-                stepArray.append(componentMatrix)
-
-            self.history.append(np.array(stepArray))
+            self.history.append(np.array(LiDARcomponents))
 
         # Synchronizing with main thread and graphing the matrix in matplotlib. 
         with self.matrix_lock:
@@ -227,27 +217,13 @@ class LiDAR:
 
 
     def filter(self, components):
-        componentMatrices = []
         stepArray = []
-
-        # Appending all components, represented as matrices to the componentMatrices array.
-        for component in components:
-            componentMatrix = np.array([
-                component['index'],
-                component['x'],
-                component['y'],
-                component['width'],
-                component['height'],
-                component['area']
-            ])
-
-            componentMatrices.append(componentMatrix)
 
         # Checking which new matrix is the closest to a historical matrix.
         for historicalMatrix in self.history[-1]:
             filterArray = []
 
-            for componentMatrix in componentMatrices:
+            for componentMatrix in components:
                 # Subtract the historical matrix from the current one; The smaller the value, the more similar they are! || NOTE: Implement WEIGHT for the individual components!!!
                 bufferArray = np.abs(historicalMatrix - componentMatrix)
                 mean = np.fix(np.mean(bufferArray))
@@ -264,16 +240,31 @@ class LiDAR:
                 stepArray.append(np.array([historicalMatrix[0], sortedArray[0, 0], sortedArray[0, 1]]))
         
         stepArray = np.array(stepArray)
-        print(stepArray)
 
-        # print('histArray: %s' %len(self.history[-1]))
-        # print('compArray: %s' %len(components))
-        # print('stepArray: %s' %len(stepArray))
+        # Creating a new array which should incorporate the sorted values.
+        maxValueHistorical = np.max(stepArray[:, 0])
+        maxValueModern = np.max(stepArray[:, 1])
+        maxValue = int(max(maxValueHistorical, maxValueModern) + 1)
+        
+        finalArray = np.zeros((maxValue, len(components[0] + 1)))
 
-        # for i, component in enumerate(componentMatrices):
-        #     indices = np.where(stepArray[:, 1] == component[0])[0]
-    
-        self.history.append(componentMatrices)
+        # Incorporating the values. 
+        for component in stepArray:
+            finalArray[int(component[0])] = components[int(component[1])][:]
+        
+        # Removing all zero-rows!
+        mask_zero = np.any(finalArray != 0, axis=1)
+        finalArray = finalArray[mask_zero]
+
+        print(f'Pre-final: \n {finalArray}')
+
+        for component in components:
+            if component not in finalArray:
+                finalArray = np.append(finalArray, component)
+
+        print(f'Final: \n {finalArray}')
+
+        self.history.append(finalArray)
 
         if len(self.history) >= 10:
             self.history.pop(0)
