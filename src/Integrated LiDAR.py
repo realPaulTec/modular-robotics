@@ -171,21 +171,36 @@ class LiDAR:
 
                     # print('I: %s || x: %s || y: %s || a: %s' %(component['index'], component['x'], component['y'], component['area']))
 
-            self.filter(LiDARcomponents)
+            if len(self.history) > 0:
+                self.filter(LiDARcomponents)
+            else:
+                stepArray = []
+
+                for component in LiDARcomponents:
+                    componentMatrix = np.array([
+                        component['index'],
+                        component['x'],
+                        component['y'],
+                        component['width'],
+                        component['height'],
+                        component['area']
+                    ])
+
+                    stepArray.append(componentMatrix)
+
+                self.history.append(np.array(stepArray))
 
             with self.matrix_lock:
                 self.graphingMatrix = connectedLiDAR[1]
-
-                # Thresholding matrix for user interface || Helpful with large resolutions
-                # self.graphingMatrix[matrix < self.DISPLAY_THRESHOLD] = 0
 
                 # Printing delta time
                 secondaryTime = time.time()
                 print('Delta Time: %ss' %(format((secondaryTime - primaryTime), '.2f')))
 
+
     def filter(self, components):
+        componentMatrices = []
         stepArray = []
-        subStepArray = []
 
         for component in components:
             componentMatrix = np.array([
@@ -195,58 +210,113 @@ class LiDAR:
                 component['width'],
                 component['height'],
                 component['area']
-                ])
+            ])
+
+            componentMatrices.append(componentMatrix)
+
+        for historicalMatrix in self.history[-1]:
+            filterArray = []
+
+            for componentMatrix in componentMatrices:
+                # Subtract the historical matrix from the current one; The smaller the value, the more similar they are! || NOTE: Implement WEIGHT for the individual components!!!
+                bufferArray = np.abs(historicalMatrix - componentMatrix)
+                mean = np.fix(np.mean(bufferArray))
+
+                filterArray.append(np.array([componentMatrix[0], mean]))
+
+            # Sort the filterArray value, while keeping the index. In this case the sortedArray represents how similar each new matrix is to the historical one!
+            filterArray = np.array(filterArray)
+            sortedIndices = np.argsort(filterArray[:, 1])
+            sortedArray = filterArray[sortedIndices]
             
-            stepArray.append(componentMatrix)
+            if sortedArray[0, 1] <= self.MAX_MATRIX_DIFFERENCE:
+                stepArray.append(np.array([historicalMatrix[0], sortedArray[0, 0], sortedArray[0, 1]]))
+        
+        stepArray = np.array(stepArray)
+        print(stepArray)
+        
+        # finalMatrix = np.zeros(len(componentMatrices), 6))
+        # orphanMatrices = []
+        # for i, component in enumerate(componentMatrices):
+        #     indices = np.where(stepArray[:, 1] == component[0])[0]
 
-            if len(self.history) > 0:
-                filterArray = []
+        #     if len(indices) == 1:
+        #         currentComponent = stepArray[int(indices)] 
 
-                for historicalMatrix in self.history[-1]:
-                    # Subtract the historical matrix from the current one; The smaller the value, the more similar they are!
-                    # NOTE: Implement WEIGHT for the individual components!!!
-                    bufferArray = np.abs(componentMatrix - historicalMatrix)
+        #         print(currentComponent)
 
-                    mean = np.fix(np.mean(bufferArray))
-                    appendArray = np.array([historicalMatrix[0], mean])
+        #         finalMatrix[currentComponent[0]] = currentComponent
+                
+        #         # print(stepArray[indices])
 
-                    filterArray.append(appendArray)
+        self.history.append(componentMatrices)
 
-                # Sort the filterArray value, while keeping the index. In this case the sortedArray represents how similar each historicalMatrix is to the current one!
-                filterArray = np.array(filterArray)
-                sortedIndices = np.argsort(filterArray[:, 1])
-                sortedArray = filterArray[sortedIndices]
-
-                # if sortedArray[0, 0] <= self.MAX_MATRIX_DIFFERENCE:
-                print('Difference: %s' %sortedArray[0, 0])
-                componentMatrix[0] = sortedArray[0, 0]
-
-                # NOTE: Reduce duplicate 'closest arrays' by checking which one is actually the closest! Also the one which is not close will be given an index outside the current bounds.
-    
-                subStepArray.append(componentMatrix)
-
-        if len(subStepArray) > 0:
-            sortedSubStepArray = np.zeros((len(subStepArray), 6))
-
-            subStepArray = np.array(subStepArray)
-            sortedIndices = np.argsort(subStepArray[0])
-
-            print('Indices: %s' %len(sortedIndices))
-            print('SSArr: %s' %len(subStepArray))
-
-            for i in sortedIndices:
-                if i < len(subStepArray):
-                    sortedSubStepArray[i] = subStepArray[i]
-
-            print(subStepArray)
-
-        # Avoid using too much memory, popping history.
         if len(self.history) >= 10:
             self.history.pop()
+
+        # for component in components:
+        #     componentMatrix = np.array([
+        #         component['index'],
+        #         component['x'],
+        #         component['y'],
+        #         component['width'],
+        #         component['height'],
+        #         component['area']
+        #         ])
+            
+        #     stepArray.append(componentMatrix)
+
+        #     if len(self.history) > 0:
+        #         filterArray = []
+
+        #         for historicalMatrix in self.history[-1]:
+        #             # Subtract the historical matrix from the current one; The smaller the value, the more similar they are!
+        #             # NOTE: Implement WEIGHT for the individual components!!!
+        #             bufferArray = np.abs(componentMatrix - historicalMatrix)
+
+        #             mean = np.fix(np.mean(bufferArray))
+        #             appendArray = np.array([historicalMatrix[0], mean])
+
+        #             filterArray.append(appendArray)
+
+        #         # Sort the filterArray value, while keeping the index. In this case the sortedArray represents how similar each historicalMatrix is to the current one!
+        #         filterArray = np.array(filterArray)
+        #         sortedIndices = np.argsort(filterArray[:, 1])
+        #         sortedArray = filterArray[sortedIndices]
+
+        #         # if sortedArray[0, 0] <= self.MAX_MATRIX_DIFFERENCE:
+        #         print('Difference: %s' %sortedArray[0, 0])
+        #         componentMatrix[0] = sortedArray[0, 0]
+
+        #         # NOTE: Reduce duplicate 'closest arrays' by checking which one is actually the closest! Also the one which is not close will be given an index outside the current bounds.
+    
+        #         subStepArray.append(componentMatrix)
+
+        # if len(subStepArray) > 0:
+        #     sortedSubStepArray = np.zeros((len(subStepArray), 6))
+
+        #     subStepArray = np.array(subStepArray)
+        #     sortedIndices = np.argsort(subStepArray[0])
+
+        #     print('Indices: %s' %len(sortedIndices))
+        #     print('SSArr: %s' %len(subStepArray))
+
+        #     for i in sortedIndices:
+        #         if i < len(subStepArray):
+        #             sortedSubStepArray[i] = subStepArray[i]
+
+        #     print(subStepArray)
+
+        # Avoid using too much memory, popping history.
+        # if len(self.history) >= 10:
+        #     self.history.pop()
         
-        self.history.append(stepArray)
+        # self.history.append(stepArray)
 
 currentLiDAR = LiDAR()
 
 while True:
-    currentLiDAR.update()
+    try:
+        currentLiDAR.update()
+    except KeyboardInterrupt:
+        break
