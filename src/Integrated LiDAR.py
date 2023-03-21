@@ -270,6 +270,70 @@ class LiDAR:
             self.history.pop(0)
 
 
+class Component:
+    def __init__(self, x, y, w, h, a, g):
+        # Initializing this component
+        self.x = x
+        self.y = y
+        self.width = w
+        self.height = h
+        self.area = a
+        self.geometry = g
+
+        self.matrix = self.generate_matrix()
+
+        self.history = []
+
+    def generate_matrix(self):
+        matrix = np.array([
+            self.x,
+            self.y,
+            self.width,
+            self.height,
+            self.area
+        ])
+        
+        return matrix
+    
+    def set_to_other(self, component):
+        # Set the core variables of this class to the values of the new component
+        self.history.append(self.matrix)
+
+        self.x = component.x
+        self.y = component.y
+        self.width = component.width
+        self.height = component.height
+        self.area = component.area
+        self.geometry = component.geometry
+
+    def check_similarity_single(self, input_class, max_difference):
+        self.matrix = self.generate_matrix()
+        inputMatrix = input_class.generate_matrix()
+        
+        bufferArray = np.abs(inputMatrix - self.matrix)
+        mean = np.fix(np.mean(bufferArray)) 
+
+        return mean
+
+    def check_similarity_array(self, input_array, max_difference):
+        similarityList = []
+        
+        # We want to figure out which component in an array is the most similar to this class!
+        for i, component in enumerate(input_array):
+            mean = self.check_similarity_array(component, max_difference)
+
+            # Check if the mean is below the maximum allowed difference between arrays.
+            if mean <= max_difference:
+                similarityList.append(np.array[i, mean])
+
+        # Converting the list to a numpy array and sorting it | lower values represent higher similarity | return the most similar value
+        similarityArray = np.array(similarityList)
+        similarityArray = similarityArray[np.argsort(similarityArray[:, 1])]
+
+        return similarityArray[0]
+            
+
+
 currentLiDAR = LiDAR()
 
 while True:
