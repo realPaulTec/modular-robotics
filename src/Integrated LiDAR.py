@@ -176,7 +176,7 @@ class LiDAR:
         components = connectedLiDAR[2]
         totalComponents = connectedLiDAR[0]
 
-        # Making a dictionary of the components. NOTE: Change to np.array for performance reasons.
+        # Making a dictionary of the components. TODO: Change to np.array for performance reasons.
         for i in range(totalComponents - 1):
             if components[i + 1, cv2.CC_STAT_AREA] >= self.AREA_THRESHOLD:
                 component = Component(
@@ -194,19 +194,28 @@ class LiDAR:
 
         # Filtering the LiDAR components, compared to their historical counterparts. 
         if len(self.LiDARcomponents) > 0:
-            self.filter(componentsN)
+            filteredComponents = self.filter(componentsN)
         else:
             self.LiDARcomponents = componentsN
+            filteredComponents = self.LiDARcomponents
+
+        # Making a new matrix to drawn on with the filtered components!
+        canvasMatrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X)).astype(np.int16)
+
+        for i, component in enumerate(filteredComponents): # TODO: Give every class a unique UUID which will be preserved over the generations and is the seed for a random color!
+            brush = component.geometry
+            brush[brush > 0] = 1
+            canvasMatrix += brush
 
         # Synchronizing with main thread and graphing the matrix in matplotlib. 
         with self.matrix_lock:
-            self.graphingMatrix = connectedLiDAR[1]
+            self.graphingMatrix = canvasMatrix # connectedLiDAR[1]
 
     def filter(self, componentsN):
         elementList = []
         
         for component in self.LiDARcomponents:
-            # Get the index of the most similar historical component to the current component | NOTE: Fix duplicates which are similar to two different historical arrays!
+            # Get the index of the most similar historical component to the current component | TODO: Fix duplicates which are similar to two different historical arrays!
             simOutput = component.check_similarity_array(componentsN, self.MAX_MATRIX_DIFFERENCE)
             
             # Pass the component to the next generation if it has found a child!
@@ -219,6 +228,8 @@ class LiDAR:
 
         # Set the new updated components!
         self.LiDARcomponents = np.array(elementList)
+
+        return self.LiDARcomponents
 
 class Component:
     def __init__(self, x, y, w, h, a, g):
