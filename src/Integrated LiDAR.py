@@ -88,21 +88,18 @@ class LiDAR:
 
         # ===== General setup =====================================
 
-        self.history = []
+        self.LiDARcomponents = []
     
         max_x = self.MAX_DISTANCE_METERS / np.cos(np.pi / 4)
         max_y = self.MAX_DISTANCE_METERS / np.sin(np.pi / 4)
         self.max_x_y = max(max_x, max_y) * 1000
 
-
     def update(self):
         self.graphing()
-
 
     def on_exit(self):
         self.lidar.set_motor_pwm(0)
         self.lidar.disconnect()
-
 
     def graphing(self):
         # Graphing the LiDAR output
@@ -111,7 +108,6 @@ class LiDAR:
             self.matrixVisualization.imshow(self.graphingMatrix, cmap = self.COLOR_MAP)
 
         plt.pause(0.01)
-
 
     def scan(self):
         global graphingMatrix
@@ -145,7 +141,6 @@ class LiDAR:
             secondaryTime = time.time()
             print('Delta Time: %ss' %(format((secondaryTime - primaryTime), '.2f')))
 
-
     def get_scan_matrix(self, matrix, scan):
         # Getting hit coordinates relative to LiDAR position in meters!
         primary_x = np.cos(np.deg2rad(scan.angle)) * (scan.distance / 1000)
@@ -166,10 +161,8 @@ class LiDAR:
 
         return matrix
 
-
     def process_scan(self, matrix):
-        LiDARcomponents = []
-        LiDARmatrices = []
+        componentsN = []
             
         # Making matrix binary and getting individual components
         processingMatrix = (matrix >= self.THRESHOLD_SCANS_PROCESSING).astype(np.uint8)
@@ -186,92 +179,52 @@ class LiDAR:
         # Making a dictionary of the components. NOTE: Change to np.array for performance reasons.
         for i in range(totalComponents - 1):
             if components[i + 1, cv2.CC_STAT_AREA] >= self.AREA_THRESHOLD:
-                component = np.array([
-                    i,                                          # Index | Acts as ID
+                component = Component(
                     components[i + 1, cv2.CC_STAT_LEFT],        # x coordinate
                     components[i + 1, cv2.CC_STAT_TOP],         # y coordinate
                     components[i + 1, cv2.CC_STAT_WIDTH],       # Width
                     components[i + 1, cv2.CC_STAT_HEIGHT],      # Height
                     components[i + 1, cv2.CC_STAT_AREA],        # Area
-                ])
+                    (connectedLiDAR[1] == i).astype(np.uint8)   # Geometry (matrix)
+                )
                 
-                LiDARcomponents.append(component)
-                LiDARmatrices.append([
-                    i,                                          # Index
-                    (connectedLiDAR[1] == i).astype(np.uint8)   # Matrix
-                ])
+                componentsN.append(component)
 
-        LiDARcomponents = np.array(LiDARcomponents)
+        componentsN = np.array(componentsN)
 
         # Filtering the LiDAR components, compared to their historical counterparts. 
-        if len(self.history) > 0:
-            self.filter(LiDARcomponents)
-
-        # On the first run, the history will be appended from the process_scan function.
+        if len(self.LiDARcomponents) > 0:
+            self.filter(componentsN)
         else:
-            self.history.append(np.array(LiDARcomponents))
+            self.LiDARcomponents = componentsN
 
         # Synchronizing with main thread and graphing the matrix in matplotlib. 
         with self.matrix_lock:
             self.graphingMatrix = connectedLiDAR[1]
 
-
-    def filter(self, components):
-        stepArray = []
-
-        # Checking which new matrix is the closest to a historical matrix.
-        for historicalMatrix in self.history[-1]:
-            filterArray = []
-
-            for componentMatrix in components:
-                # Subtract the historical matrix from the current one; The smaller the value, the more similar they are! || NOTE: Implement WEIGHT for the individual components!!!
-                bufferArray = np.abs(historicalMatrix - componentMatrix)
-                mean = np.fix(np.mean(bufferArray))
-
-                filterArray.append(np.array([componentMatrix[0], mean]))
-
-            # Sort the filterArray value, while keeping the index. In this case the sortedArray represents how similar each new matrix is to the historical one!
-            filterArray = np.array(filterArray)
-            sortedIndices = np.argsort(filterArray[:, 1])
-            sortedArray = filterArray[sortedIndices]
-
-            # For the arrays to be seen as the same, the median of their differences must be below a certain threshold.
-            if sortedArray[0, 1] <= self.MAX_MATRIX_DIFFERENCE:
-                stepArray.append(np.array([historicalMatrix[0], sortedArray[0, 0], sortedArray[0, 1]]))
+    def filter(self, componentsN):
+        elementList = []
         
-        stepArray = np.array(stepArray)
+        for component in self.LiDARcomponents:
+            # Get the index of the most similar historical component to the current component | NOTE: Fix duplicates which are similar to two different historical arrays!
+            simOutput = component.check_similarity_array(componentsN, self.MAX_MATRIX_DIFFERENCE)
+            
+            # Pass the component to the next generation if it has found a child!
+            if simOutput != None:
+                index, similarity = simOutput
 
-        # Creating a new array which should incorporate the sorted values.
-        maxValueHistorical = np.max(stepArray[:, 0])
-        maxValueModern = np.max(stepArray[:, 1])
-        maxValue = int(max(maxValueHistorical, maxValueModern) + 1)
-        
-        finalArray = np.zeros((maxValue, len(components[0] + 1)))
+                # Actually pass it to the next generation!
+                component.set_to_other(componentsN[int(index)])
+                elementList.append(component)
 
-        # Incorporating the values. 
-        for component in stepArray:
-            finalArray[int(component[0])] = components[int(component[1])][:]
-        
-        # Removing all zero-rows!
-        mask_zero = np.any(finalArray != 0, axis=1)
-        finalArray = finalArray[mask_zero]
-
-        print(f'Pre-final: \n {finalArray}')
-
-        for component in components:
-            if component not in finalArray:
-                finalArray = np.append(finalArray, component)
-
-        print(f'Final: \n {finalArray}')
-
-        self.history.append(finalArray)
-
-        if len(self.history) >= 10:
-            self.history.pop(0)
-
+        # Set the new updated components!
+        self.LiDARcomponents = np.array(elementList)
 
 class Component:
     def __init__(self, x, y, w, h, a, g):
+        # ===== Constants =========================================
+        self.LEN_MAX_HISTORY = 10
+        
         # Initializing this component
         self.x = x
         self.y = y
@@ -296,9 +249,14 @@ class Component:
         return matrix
     
     def set_to_other(self, component):
-        # Set the core variables of this class to the values of the new component
+        # Appending own matrix into history
         self.history.append(self.matrix)
 
+        # Saving memory by not keeping infinite history!
+        if len(self.history) >= self.LEN_MAX_HISTORY:
+            self.history.pop(0)
+
+        # Set the core variables of this class to the values of the new component
         self.x = component.x
         self.y = component.y
         self.width = component.width
@@ -306,7 +264,7 @@ class Component:
         self.area = component.area
         self.geometry = component.geometry
 
-    def check_similarity_single(self, input_class, max_difference):
+    def check_similarity_single(self, input_class) -> int:
         self.matrix = self.generate_matrix()
         inputMatrix = input_class.generate_matrix()
         
@@ -320,18 +278,24 @@ class Component:
         
         # We want to figure out which component in an array is the most similar to this class!
         for i, component in enumerate(input_array):
-            mean = self.check_similarity_array(component, max_difference)
+            mean = self.check_similarity_single(component)
 
             # Check if the mean is below the maximum allowed difference between arrays.
-            if mean <= max_difference:
-                similarityList.append(np.array[i, mean])
+            if mean <= max_difference and mean != None:
+                similarityList.append(np.array([i, mean]))
 
         # Converting the list to a numpy array and sorting it | lower values represent higher similarity | return the most similar value
         similarityArray = np.array(similarityList)
-        similarityArray = similarityArray[np.argsort(similarityArray[:, 1])]
 
-        return similarityArray[0]
-            
+        try:
+            similarityArray = similarityArray[np.argsort(similarityArray[:, 1])]
+        except IndexError:
+            pass   # NOTE: There might still be an dimension error . indexerror with less than 2 components ¯\(o_o)/¯ 
+
+        if len(similarityArray) > 0:
+            return similarityArray[0, 0], similarityArray[0, 1]
+        else:
+            return None
 
 
 currentLiDAR = LiDAR()
