@@ -185,7 +185,7 @@ class LiDAR:
                     components[i + 1, cv2.CC_STAT_WIDTH],       # Width
                     components[i + 1, cv2.CC_STAT_HEIGHT],      # Height
                     components[i + 1, cv2.CC_STAT_AREA],        # Area
-                    (connectedLiDAR[1] == i).astype(np.uint8)   # Geometry (matrix)
+                    np.array((connectedLiDAR[1] == (i + 1)).astype(np.uint8))   # Geometry (matrix)
                 )
                 
                 componentsN.append(component)
@@ -203,8 +203,11 @@ class LiDAR:
         canvasMatrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X)).astype(np.int16)
 
         for i, component in enumerate(filteredComponents): # TODO: Give every class a unique UUID which will be preserved over the generations and is the seed for a random color!
+            print(f"COMPONENT {component.UUID}: \n x: {component.x} | y: {component.y} | width: {component.width} | height: {component.height}")
+
             brush = component.geometry
-            brush[brush > 0] = 1
+            brush[brush > 0] = component.UUID
+
             canvasMatrix += brush
 
         # Synchronizing with main thread and graphing the matrix in matplotlib. 
@@ -225,6 +228,10 @@ class LiDAR:
                 # Actually pass it to the next generation!
                 component.set_to_other(componentsN[int(index)])
                 elementList.append(component)
+            # Append NEW components
+            else:
+                elementList.append(component)
+
 
         # Set the new updated components!
         self.LiDARcomponents = np.array(elementList)
@@ -232,10 +239,16 @@ class LiDAR:
         return self.LiDARcomponents
 
 class Component:
+    UUID = 1
+
     def __init__(self, x, y, w, h, a, g):
         # ===== Constants =========================================
         self.LEN_MAX_HISTORY = 10
         
+        # Giving each class a unique ID
+        self.UUID = Component.UUID
+        Component.UUID += 1
+
         # Initializing this component
         self.x = x
         self.y = y
