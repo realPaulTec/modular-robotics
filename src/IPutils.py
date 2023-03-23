@@ -1,9 +1,9 @@
 import numpy as np
 import cv2
 
-def adjustSaturation(frame, saturation):
+def adjustSaturation(frameIn, saturation):
     # Converting the color to HSV and avoiding unit8 overflow error with float values
-    hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV).astype("float32")
+    hsv = cv2.cvtColor(frameIn, cv2.COLOR_BGR2HSV).astype("float32")
     (h, s, v) = cv2.split(hsv)
 
     # Saturation value adjustment + overflow clipping
@@ -42,3 +42,16 @@ def adjustContrast(frame, contrast = 127, brightness = 255):
         buffer = cv2.addWeighted(buffer, contrastAlpha, buffer, 0, contrastGamma)
 
     return buffer
+
+def rectangular_masking(frame, canvasFrame, coordinates, extents, buffer):
+    # Initializing mask
+    mask = np.zeros(frame.shape[:2], dtype="uint8")
+
+    # Setting up the mask with coordinates, radius, color and invert
+    cv2.rectangle(mask, (int(coordinates[0] - buffer), int(coordinates[1] - buffer)), (int(coordinates[0] + extents[0] + buffer), int(coordinates[1] + extents[1] + buffer)), 255, -1)
+    maskedImage = cv2.bitwise_and(frame, frame, mask = mask)
+
+    # Drawing masked region as red circle
+    cv2.rectangle(canvasFrame, (int(coordinates[0] - buffer), int(coordinates[1] - buffer)), (int(coordinates[0] + extents[0] + buffer), int(coordinates[1] + extents[1] + buffer)), 255, 2)
+
+    return maskedImage, canvasFrame

@@ -66,18 +66,20 @@ class systemTrack:
         stream = self.video.read()
         frame = stream[1]
 
+        canvasFrame = np.array(frame)
+
         self.frameHistory["camera feed"] = frame
 
 
         # ===== Color Processing ==================================
         # Applying color correction
-        frame = self.color_correction(frame)
+        frameCC = self.color_correction(frame)
 
         # Masking the frame based on mask settings
-        frame = self.set_mask(frame)
+        frameMK, canvasFrame = self.set_mask(frameCC, canvasFrame)
 
         # Turning all images into grayscale
-        images = self.processing_images(frame)
+        images = self.processing_images(frameMK)
 
 
         # ===== Applying Thresholds ===============================
@@ -110,21 +112,21 @@ class systemTrack:
 
         # ===== Rendering =========================================
         # Rendering green boxes where components were detected!
-        frame = self.render_components(refinedComponents, frame)
+        canvasFrame = self.render_components(refinedComponents, canvasFrame)
 
         # Setting the final result to the frame history!
-        self.frameHistory["final"] = frame
+        self.frameHistory["final"] = canvasFrame
 
-        return self.frame, self.frameHistory, self.refined_components 
+        return frame, refinedComponents, self.frameHistory
 
     def color_correction(self, frame):
-        frame = IPutils.adjustSaturation(frame, self.saturationAdjustment)
+        frameCC = IPutils.adjustSaturation(frame, self.saturationAdjustment)
         # frame = IPutils.adjustContrast(frame, self.contrastAdjustment, self.brightnessAdjustment)
-        self.frameHistory["color corrected"] = frame
+        self.frameHistory["color corrected"] = frameCC
 
-        return frame
+        return frameCC
 
-    def set_mask(self, frame):
+    def set_mask(self, frame, canvasFrame):
         if len(self.refined_components) > 0:
             # Using first track coordinates as mask coordinates
             x, y = self.refined_components[0].x, self.refined_components[0].y
@@ -140,14 +142,14 @@ class systemTrack:
 
         # Applying mask with my masking function
         if self.useMask == True:
-            maskedFrame = self.rectangularMasking(frame, coordinates, extents, self.maskBuffer)
+            maskedFrame, canvasFrame = IPutils.rectangular_masking(frame, canvasFrame, coordinates, extents, self.maskBuffer)
         else:
             maskedFrame = frame
 
         # Show the results of this step in the frame history!
         self.frameHistory["masked frame"] = maskedFrame
 
-        return maskedFrame
+        return maskedFrame, canvasFrame
 
     def processing_images(self, frame):
         # Splitting BGR image
@@ -230,13 +232,7 @@ class systemTrack:
             filteredComponents = self.trackComponents
 
         return filteredComponents
-
-    def render_components(self, components, frame):
-        for component in components:
-            cv2.rectangle(frame, (component.x, component.y), (component.x + component.width, component.y + component.height), (0, 255, 0), 3)
-
-        return frame
-
+    
     def filter_components(self, componentsN):
         elementList = []
         
@@ -273,18 +269,11 @@ class systemTrack:
 
         return self.trackComponents
 
-    def rectangularMasking(self, frame, coordinates, extents, buffer):
-        # Initializing mask
-        mask = np.zeros(frame.shape[:2], dtype="uint8")
+    def render_components(self, components, canvasFrame):
+        for component in components:
+            cv2.rectangle(canvasFrame, (component.x, component.y), (component.x + component.width, component.y + component.height), (0, 255, 0), 3)
 
-        # Setting up the mask with coordinates, radius, color and invert
-        cv2.rectangle(mask, (int(coordinates[0] - buffer), int(coordinates[1] - buffer)), (int(coordinates[0] + extents[0] + buffer), int(coordinates[1] + extents[1] + buffer)), 255, -1)
-        maskedImage = cv2.bitwise_and(frame, frame, mask = mask)
-
-        # Drawing masked region as red circle
-        cv2.rectangle(frame, (int(coordinates[0] - buffer), int(coordinates[1] - buffer)), (int(coordinates[0] + extents[0] + buffer), int(coordinates[1] + extents[1] + buffer)), 255, 2)
-
-        return maskedImage
+        return canvasFrame
 
 
 class Component:
