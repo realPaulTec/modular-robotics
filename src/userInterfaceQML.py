@@ -52,10 +52,10 @@ class Backend:
             tracker.erosionSteps = self.signalHandeler.erosionSteps
             tracker.targetChannel = int(self.signalHandeler.targetChannel)
 
-            tracker.dialationSteps[0] = self.signalHandeler.dialationStepsBlue
-            tracker.dialationSteps[1] = self.signalHandeler.dialationStepsGreen
-            tracker.dialationSteps[2] = self.signalHandeler.dialationStepsRed
-            tracker.dialationSteps[3] = self.signalHandeler.dialationStepsBright
+            tracker.dilationSteps[0] = self.signalHandeler.dilationStepsBlue
+            tracker.dilationSteps[1] = self.signalHandeler.dilationStepsGreen
+            tracker.dilationSteps[2] = self.signalHandeler.dilationStepsRed
+            tracker.dilationSteps[3] = self.signalHandeler.dilationStepsBright
 
             # Providing tracking threshold data
             tracker.thresholdRedMax = self.signalHandeler.thresholdRedMax
@@ -69,6 +69,9 @@ class Backend:
 
             tracker.thresholdBrightMax = self.signalHandeler.thresholdBrightMax
             tracker.thresholdBrightMin = self.signalHandeler.thresholdBrightMin
+
+            tracker.MAX_MATRIX_DIFFERENCE = self.signalHandeler.maxDifference
+            tracker.MAX_LIFETIME_SECONDS = self.signalHandeler.lifetime
             
             # Killing the cycle on the first round
             if kill == True:
@@ -95,19 +98,19 @@ class SignalHandeler(QObject):
         
         self.thresholdRedMax = 255
         self.thresholdRedMin = 230
-        self.dialationStepsRed = 6
+        self.dilationStepsRed = 6
 
         self.thresholdGreenMax = 255
         self.thresholdGreenMin = 230
-        self.dialationStepsGreen = 6
+        self.dilationStepsGreen = 6
 
         self.thresholdBlueMax = 255
         self.thresholdBlueMin = 230
-        self.dialationStepsBlue = 6
+        self.dilationStepsBlue = 6
 
         self.thresholdBrightMax = 255
         self.thresholdBrightMin = 200
-        self.dialationStepsBright = 6
+        self.dilationStepsBright = 6
 
         self.dropdownSelection = "final"
 
@@ -130,6 +133,9 @@ class SignalHandeler(QObject):
 
         self.maskSelection = True
         self.erosionSteps = 4
+        self.lifetime = 4
+
+        self.maxDifference = 10
 
     @Slot(str)
     def radioSignal(self, incoming):
@@ -158,7 +164,7 @@ class SignalHandeler(QObject):
 
     @Slot(str)
     def redSetDilation(self, incoming):
-        self.dialationStepsRed = int(incoming)
+        self.dilationStepsRed = int(incoming)
 
     @Slot(str)
     def greenSliderMaxSignal(self, incoming):
@@ -170,7 +176,7 @@ class SignalHandeler(QObject):
 
     @Slot(str)
     def greenSetDilation(self, incoming):
-        self.dialationStepsGreen = int(incoming)
+        self.dilationStepsGreen = int(incoming)
 
     @Slot(str)
     def blueSliderMaxSignal(self, incoming):
@@ -182,7 +188,7 @@ class SignalHandeler(QObject):
 
     @Slot(str)
     def blueSetDilation(self, incoming):
-        self.dialationStepsBlue = int(incoming)
+        self.dilationStepsBlue = int(incoming)
 
     @Slot(str)
     def brightSliderMaxSignal(self, incoming):
@@ -194,7 +200,15 @@ class SignalHandeler(QObject):
 
     @Slot(str)
     def brightSetDilation(self, incoming):
-        self.dialationStepsBright = int(incoming)
+        self.dilationStepsBright = int(incoming)
+
+    @Slot(str)
+    def setMaxDifference(self, incoming):
+        self.maxDifference = int(incoming)
+
+    @Slot(str)
+    def setLifetime(self, incoming):
+        self.lifetime = int(incoming)
 
 
 class ImageProvider(QQuickImageProvider):

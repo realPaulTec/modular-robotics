@@ -7,11 +7,12 @@ import threading
 import cv2
 
 import matplotlib.pyplot as plt
+import matplotlib.font_manager as fm
 import numpy as np
 
 # Setting constants || Should be an uneven number
-RESOLUTION_X = 55
-RESOLUTION_Y = 55
+RESOLUTION_X = 85
+RESOLUTION_Y = 85
 
 MATRIX_VISUALISATION_DIALATION = 0
 DISPLAY_THRESHOLD = 1
@@ -42,7 +43,7 @@ def exit_handler():
 atexit.register(exit_handler)
 
 # Spinning the motor up
-lidar.set_motor_pwm(800)
+lidar.set_motor_pwm(600)
 time.sleep(2)
 
 # Setting up LiDAR output and graphing lists
@@ -52,9 +53,20 @@ distanceGraph, angleGraph = [], []
 graphingMatrix = np.zeros((RESOLUTION_Y, RESOLUTION_X))
 
 # Setting up the plot for the LiDAR visualisation
-fig = plt.figure()
+
+font = {'family' : 'URW Gothic',
+        'weight' : 'bold',
+        'size'   : 14}
+
+plt.rc('font', **font)
+
+fig = plt.figure(facecolor='black')
 axis = fig.add_subplot(121, projection = 'polar')
 matrixVisualisation = fig.add_subplot(122)
+matrixVisualisation.tick_params(which='both', colors='#55ddffff')
+
+axis.set_facecolor('black')
+axis.tick_params(which='both', colors='#55ddffff')
 
 # Setting up thread locks for thread synchronysation
 distance_lock = threading.Lock()
@@ -116,8 +128,10 @@ def graphing():
 
     with distance_lock, angle_lock:
         axis.clear()
-        axis.scatter(angleGraph, distanceGraph, s = 1)
+        axis.scatter(angleGraph, distanceGraph, s = 5, c="#ff5050")
         axis.set_ybound(0, MAX_DISTANCE_METERS)
+
+        axis.set_xlabel('distance')
 
     with matrix_lock:
         matrixVisualisation.clear()

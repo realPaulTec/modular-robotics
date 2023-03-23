@@ -582,6 +582,38 @@ ApplicationWindow {
                                         text: 'Erosion Steps'
                                     }
                                 }
+                                
+                                SpinBox {
+                                    id: differenceSpinBox
+                                    
+                                    width: 40
+                                    
+                                    Layout.fillWidth: true
+                                    value: 4
+
+                                    onValueChanged: signalHandeler.setMaxDifference(value)
+
+                                    ToolTip {
+                                        visible: differenceSpinBox.hovered
+                                        text: 'Max Difference'
+                                    }
+                                }
+
+                                SpinBox {
+                                    id: lifetimeSpinBox
+                                    
+                                    width: 40
+                                    
+                                    Layout.fillWidth: true
+                                    value: 4
+
+                                    onValueChanged: signalHandeler.setLifetime(value)
+
+                                    ToolTip {
+                                        visible: lifetimeSpinBox.hovered
+                                        text: 'Component Lifetime'
+                                    }
+                                }
                             }
                         }
                     }

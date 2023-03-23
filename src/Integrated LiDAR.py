@@ -9,6 +9,12 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 
+font = {'family' : 'URW Gothic',
+        'weight' : 'bold',
+        'size'   : 14}
+
+plt.rc('font', **font)
+
 class LiDAR:
     def __init__(self) -> None:
         # ===== LiDAR constants ===================================
@@ -82,8 +88,9 @@ class LiDAR:
         self.graphingMatrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X))
 
         # Setting up the plot for the LiDAR visualization
-        self.fig = plt.figure()
+        self.fig = plt.figure(facecolor='black')
         self.matrixVisualization = self.fig.add_subplot()
+        self.matrixVisualization.tick_params(which='both', colors='#55ddffff')
 
 
         # ===== General setup =====================================
@@ -202,11 +209,11 @@ class LiDAR:
         # Making a new matrix to drawn on with the filtered components!
         canvasMatrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X)).astype(np.int16)
 
-        for i, component in enumerate(filteredComponents): # TODO: Give every class a unique UUID which will be preserved over the generations and is the seed for a random color!
-            print(f"COMPONENT {component.UUID}: \n x: {component.x} | y: {component.y} | width: {component.width} | height: {component.height}")
+        for i, component in enumerate(filteredComponents): # TODO: Give every class a unique ID which will be preserved over the generations and is the seed for a random color!
+            print(f"COMPONENT {component.ID}: \n x: {component.x} | y: {component.y} | width: {component.width} | height: {component.height}")
 
             brush = component.geometry
-            brush[brush > 0] = component.UUID
+            brush[brush > 0] = component.ID
 
             canvasMatrix += brush
 
@@ -239,15 +246,15 @@ class LiDAR:
         return self.LiDARcomponents
 
 class Component:
-    UUID = 1
+    ID = 1
 
     def __init__(self, x, y, w, h, a, g):
         # ===== Constants =========================================
         self.LEN_MAX_HISTORY = 10
         
         # Giving each class a unique ID
-        self.UUID = Component.UUID
-        Component.UUID += 1
+        self.ID = Component.ID
+        Component.ID += 1
 
         # Initializing this component
         self.x = x

@@ -3,10 +3,7 @@
 import numpy as np
 import time
 import cv2
-
-# Roadmap:
-# Proper GUI
-
+import IPutils
 
 class systemTrack:
     def __init__(self, vcd, targetChannel=0, aqqExtents=(100, 100), saturationAdjustment=1.2, contrastAdjustment=1.02, brightnessAdjustment=0) -> None:
@@ -35,12 +32,17 @@ class systemTrack:
         self.thresholdBrightMax = 255
         self.thresholdBrightMin = 200
 
-        self.dialationSteps = [6, 6, 6, 6]
+        self.dilationSteps = [6, 6, 6, 6]
 
         self.erosionSteps = 4
 
         self.useMask = True
         self.maskBuffer = 40
+
+        self.trackComponents = []
+
+        self.MAX_MATRIX_DIFFERENCE = 2000
+        self.MAX_LIFETIME_SECONDS = 4
 
         self.frameHistory = {
             "camera feed" : None,
@@ -60,65 +62,94 @@ class systemTrack:
         }
 
     def mainCycle(self):
-        # Reading the frame displayed by the system camera
+        # ===== Reading Camera ====================================
         stream = self.video.read()
         frame = stream[1]
 
         self.frameHistory["camera feed"] = frame
 
+
+        # ===== Color Processing ==================================
+        # Applying color correction
+        frame = self.color_correction(frame)
+
+        # Masking the frame based on mask settings
+        frame = self.set_mask(frame)
+
+        # Turning all images into grayscale
+        images = self.processing_images(frame)
+
+
+        # ===== Applying Thresholds ===============================
+        thresholds = []
+
+        # Setting the min and max thresholds for the BGR images!  
+        minThresholds = (self.thresholdBlueMin, self.thresholdGreenMin, self.thresholdRedMin, self.thresholdBrightMin)
+        maxThresholds = (self.thresholdBlueMax, self.thresholdGreenMax, self.thresholdRedMax, self.thresholdBrightMax)
+
+        # Looping trough all grayscale images and applying the correct min and max threshold!
+        for i, image in enumerate(images):
+            thresholdMin = cv2.threshold(image, minThresholds[i], 255, cv2.THRESH_BINARY)[1]
+            thresholdMax = cv2.threshold(image, maxThresholds[i], 255, cv2.THRESH_BINARY)[1]
+
+            thresholds.append(
+                thresholdMin - thresholdMax
+            )
+
+
+        # ===== Component Tracking ================================
+        # Tracking the individual components in an array
+        threshold = self.processing_thresholds(thresholds, frame)
+
+        # Letting OpenCV recognize the white islands left by previous operations
+        connectedComponentsStats = cv2.connectedComponentsWithStats(threshold, 1, cv2.CV_32S)
+
+        # Refining the components into component classes 
+        refinedComponents = self.refine_components(connectedComponentsStats)
+
+
+        # ===== Rendering =========================================
+        # Rendering green boxes where components were detected!
+        frame = self.render_components(refinedComponents, frame)
+
+        # Setting the final result to the frame history!
+        self.frameHistory["final"] = frame
+
+        return self.frame, self.frameHistory, self.refined_components 
+
+    def color_correction(self, frame):
+        frame = IPutils.adjustSaturation(frame, self.saturationAdjustment)
+        # frame = IPutils.adjustContrast(frame, self.contrastAdjustment, self.brightnessAdjustment)
+        self.frameHistory["color corrected"] = frame
+
+        return frame
+
+    def set_mask(self, frame):
         if len(self.refined_components) > 0:
             # Using first track coordinates as mask coordinates
-            (x, y) = self.refined_components[0][1]
+            x, y = self.refined_components[0].x, self.refined_components[0].y
             coordinates = (int(x), int(y))
 
             # Using first track dimensions as mask radius
-            (width, height) = self.refined_components[0][2]
+            (width, height) = self.refined_components[0].width, self.refined_components[0].height
             extents = (int(width), int(height))
         else:
             # Using video center as mask coordinates
             coordinates = (int((self.videoDimensions[0] / 2) - (self.acquisitionExtents[0] / 2)), int((self.videoDimensions[1] / 2) - (self.acquisitionExtents[1] / 2)))
-
-            # Using standard acquisition radius as mask radius
             extents = self.acquisitionExtents
 
-        self.refined_components, self.frame = self.trackCycle(frame, extents, coordinates)
-
-        return self.frame, self.frameHistory, self.refined_components 
-
-    def trackCycle(self, frame, mExtents, mCoordinates):
-        # Stage one color correction
-        frame = self.adjustSaturation(frame, self.saturationAdjustment)
-
-        # CAUSING PROBLEMS:
-        # frame = self.adjustContrast(frame, self.contrastAdjustment, self.brightnessAdjustment)
-        
-        self.frameHistory["color corrected"] = frame
-
-        # Applying mask with my own function
+        # Applying mask with my masking function
         if self.useMask == True:
-            maskedFrame = self.rectangularMasking(frame, mCoordinates, mExtents, self.maskBuffer)
+            maskedFrame = self.rectangularMasking(frame, coordinates, extents, self.maskBuffer)
         else:
             maskedFrame = frame
 
+        # Show the results of this step in the frame history!
         self.frameHistory["masked frame"] = maskedFrame
 
-        # Color processing the image with saturation and my custom colorProcessing function
-        images = self.imageColorProcessing(maskedFrame)
+        return maskedFrame
 
-        self.frameHistory["blue image"] = images[0]
-        self.frameHistory["green image"] = images[1]
-        self.frameHistory["red image"] = images[2]
-        
-        self.frameHistory["white image"] = images[3]
-
-        # Tracking the induvidual components in an array
-        refined_components = self.componentProcessing(images, frame)
-
-        self.frameHistory["final"] = frame
-
-        return refined_components, frame
-
-    def imageColorProcessing(self, frame):
+    def processing_images(self, frame):
         # Splitting BGR image
         channels = cv2.split(frame)
 
@@ -131,80 +162,116 @@ class systemTrack:
 
         images = (blueImage, greenImage, redImage, grayscaleImage)
         
+        # Show the results of this step in the frame history!
+        self.frameHistory["blue image"] = images[0]
+        self.frameHistory["green image"] = images[1]
+        self.frameHistory["red image"] = images[2]
+        
+        self.frameHistory["white image"] = images[3]
+
         return images 
 
-    def componentProcessing(self, images, frame):
-        # Threshholding (grayscale) white and target color channel images
-        thresholdBlueMin = cv2.threshold(images[0], self.thresholdBlueMin, 255, cv2.THRESH_BINARY)[1]
-        thresholdGreenMin = cv2.threshold(images[1], self.thresholdGreenMin, 255, cv2.THRESH_BINARY)[1]
-        thresholdRedMin = cv2.threshold(images[2], self.thresholdRedMin, 255, cv2.THRESH_BINARY)[1]
-
-        thresholdWhiteMin = cv2.threshold(images[3], self.thresholdBrightMin, 255, cv2.THRESH_BINARY)[1]
-
-        thresholdBlueMax = cv2.threshold(images[0], self.thresholdBlueMax, 255, cv2.THRESH_BINARY)[1]
-        thresholdGreenMax = cv2.threshold(images[1], self.thresholdGreenMax, 255, cv2.THRESH_BINARY)[1]
-        thresholdRedMax = cv2.threshold(images[2], self.thresholdRedMax, 255, cv2.THRESH_BINARY)[1]
-
-        thresholdWhiteMax = cv2.threshold(images[3], self.thresholdBrightMax, 255, cv2.THRESH_BINARY)[1]
-
-        thresholdBlue = thresholdBlueMin - thresholdBlueMax
-        thresholdGreen = thresholdGreenMin - thresholdGreenMax
-        thresholdRed = thresholdRedMin - thresholdRedMax
-
-        thresholdWhite = thresholdWhiteMin - thresholdWhiteMax
-
-        thresholds = [thresholdBlue, thresholdGreen, thresholdRed, thresholdWhite]
-        threshold = thresholds[self.targetChannel]
+    def processing_thresholds(self, thresholds, frame):
+        # Get the thresholds
+        threshold = thresholds[self.targetChannel]    
 
         # Subtracting white threshold to avoid tracking bright lights maxing out all BGR channels
         if not self.targetChannel == 3:
-            for i, currentThreshhold in enumerate(thresholds):
-                if not np.array_equiv(thresholds[self.targetChannel], currentThreshhold):
-                    currentThreshhold = cv2.dilate(currentThreshhold, None, iterations = self.dialationSteps[i])
-                    thresholds[i] = currentThreshhold
+            for i, currentThreshold in enumerate(thresholds):
+                if not np.array_equiv(thresholds[self.targetChannel], currentThreshold):
+                    currentThreshold = cv2.dilate(currentThreshold, None, iterations = self.dilationSteps[i])
+                    thresholds[i] = currentThreshold
 
-                    threshold -= (currentThreshhold)
-
-        self.frameHistory["thresholding blue"] = thresholdBlue # thresholds[0]
-        self.frameHistory["thresholding green"] = thresholdGreen # thresholds[1]
-        self.frameHistory["thresholding red"] = thresholdRed # thresholds[2]
-
-        self.frameHistory["thresholding white"] = thresholds[3]
-
-        self.frameHistory["combination"] = threshold
+                    threshold -= (currentThreshold)
 
         # using cv2 morphology to remove noise and small light sources (e.g. reflections)
-        threshold = cv2.morphologyEx(threshold, cv2.MORPH_OPEN, None, iterations=self.erosionSteps)
-
-        self.frameHistory["tracking image"] = threshold
+        thresholdClean = cv2.morphologyEx(threshold, cv2.MORPH_OPEN, None, iterations=self.erosionSteps)
 
         # re-thresholding the processed image to purify the white output and avoid possible dark connecting islands
-        threshold = cv2.threshold(threshold, 200, 255, cv2.THRESH_BINARY)[1]
-        
-        # Letting OpenCV recognize the white islands left by previous operations
-        connected_components_stats = cv2.connectedComponentsWithStats(threshold, 1, cv2.CV_32S)  # Note: Adjust algorithm
+        thresholdClean = cv2.threshold(thresholdClean, 200, 255, cv2.THRESH_BINARY)[1]
+
+        # Showing the results of this step in the frame history.
+        self.frameHistory["thresholding blue"] = thresholds[0]
+        self.frameHistory["thresholding green"] = thresholds[1]
+        self.frameHistory["thresholding red"] = thresholds[2]
+        self.frameHistory["thresholding white"] = thresholds[3]
+        self.frameHistory["combination"] = threshold
+        self.frameHistory["tracking image"] = thresholdClean
+
+        return thresholdClean
+    
+    def refine_components(self, componentsTRK):
+        componentsN = []
 
         # Getting statistics about those islands
-        components = connected_components_stats[2]
-        total_components = connected_components_stats[0]
+        components = componentsTRK[2]
+        totalComponents = componentsTRK[0]
 
-        refined_components = []
+        # Making a dictionary of the components. TODO: Change to np.array for performance reasons.
+        for i in range(totalComponents - 1):
+            component = Component(
+                components[i + 1, cv2.CC_STAT_LEFT],                        # x coordinate
+                components[i + 1, cv2.CC_STAT_TOP],                         # y coordinate
+                components[i + 1, cv2.CC_STAT_WIDTH],                       # Width
+                components[i + 1, cv2.CC_STAT_HEIGHT],                      # Height
+                components[i + 1, cv2.CC_STAT_AREA],                        # Area
+                np.array((componentsTRK[1] == (i + 1)).astype(np.uint8))    # Geometry (matrix)
+            )
+                
+            componentsN.append(component)
 
-        for i in range(total_components - 1):
-            # Rendering the boxes in the correct location
-            x = components[i + 1, cv2.CC_STAT_LEFT]
-            y = components[i + 1, cv2.CC_STAT_TOP]
-            width = components[i + 1, cv2.CC_STAT_WIDTH]
-            height = components[i + 1, cv2.CC_STAT_HEIGHT]
-            cv2.rectangle(frame, (x, y), (x + width, y + height), (0, 255, 0), 3)
+        componentsN = np.array(componentsN)
 
-            # Refining the components by properly arranging the statistics and adjusting the coordinates to the center of the track
-            xAdjusted = x + width / 2
-            yAdjusted = y + height / 2
+        # Filtering the LiDAR components, compared to their historical counterparts. 
+        if len(self.trackComponents) > 0:
+            filteredComponents = self.filter_components(componentsN)
+        else:
+            self.trackComponents = componentsN
+            filteredComponents = self.trackComponents
 
-            refined_components.append([i, (x, y), (width, height)])
+        return filteredComponents
 
-        return refined_components
+    def render_components(self, components, frame):
+        for component in components:
+            cv2.rectangle(frame, (component.x, component.y), (component.x + component.width, component.y + component.height), (0, 255, 0), 3)
+
+        return frame
+
+    def filter_components(self, componentsN):
+        elementList = []
+        
+        for component in self.trackComponents:
+            # Get the index of the most similar historical component to the current component | TODO: Fix duplicates which are similar to two different historical arrays!
+            simOutput = component.check_similarity_array(componentsN, self.MAX_MATRIX_DIFFERENCE)
+            
+            # Pass the component to the next generation if it has found a child!
+            if simOutput != None:
+                index, similarity = simOutput
+
+                print(similarity)
+
+                # Actually pass it to the next generation!
+                componentsN[int(index)].update_component(component.ID, component.generate_matrix())
+
+                elementList.append(component)
+            # Append old component if id doesn't have a child | There is a max lifetime after which the historical component will be discarded! 
+            elif (time.time() - component.lastUpdate) <= self.MAX_LIFETIME_SECONDS:
+                elementList.append(component)
+            
+            else:
+                print(f'Component: {component.ID} has been terminated.')
+
+        # Appending all new components!
+        for component in componentsN:
+            if component not in elementList:
+                elementList.append(component)
+
+                print('new comp')
+
+        # Set the new updated components!
+        self.trackComponents = np.array(elementList)
+
+        return self.trackComponents
 
     def rectangularMasking(self, frame, coordinates, extents, buffer):
         # Initializing mask
@@ -219,47 +286,102 @@ class systemTrack:
 
         return maskedImage
 
-    def adjustSaturation(self, frame, saturation):
-        # Converting the color to HSV and avoiding unit8 overflow error with float values
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV).astype("float32")
-        (h, s, v) = cv2.split(hsv)
 
-        # Saturation value adjustment + overflow clipping
-        s *= saturation
-        s = np.clip(s, 0, 255)
+class Component:
+    ID = 1
 
-        # Merging adjusted HSV channels
-        saturatedImage = cv2.merge([h, s, v])
+    def __init__(self, x, y, w, h, a, g):
+        # ===== Constants =========================================
+        self.LEN_MAX_HISTORY = 10
+        
+        # Giving each class a unique ID
+        self.ID = Component.ID
+        Component.ID += 1
 
-        # Using uni8 again for BGR color spectrum
-        return cv2.cvtColor(saturatedImage.astype("uint8"), cv2.COLOR_HSV2BGR)
+        # Initializing this component
+        self.x = x
+        self.y = y
+        self.width = w
+        self.height = h
+        self.area = a
+        self.geometry = g
 
-    def adjustContrast(self, frame, contrast = 127, brightness = 255):
-        brightness = int((brightness - 0) * (255 - (-255)) / (510 - 0) + (-255))
-        contrast = int((contrast - 0) * (127 - (-127)) / (254 - 0) + (-127))
+        self.lastUpdate = time.time()
+        self.matrix = self.generate_matrix()
 
-        if brightness != 0:
-            if brightness > 0:
-                shadow = brightness
-                max = 255
-            else:
-                shadow = 0
-                max = 255 + brightness
+        self.history = []
 
-            brightnessAlpha = (max - shadow) / 255
-            brightnessGamma = shadow
+    def generate_matrix(self):
+        matrix = np.array([
+            self.x,
+            self.y,
+            self.width,
+            self.height,
+            self.area
+        ])
+        
+        return matrix
+    
+    def set_to_other(self, component):
+        # Appending own matrix into history
+        self.history.append(self.matrix)
 
-            buffer = cv2.addWeighted(frame, brightnessAlpha, frame, 0, brightnessGamma)
+        # Saving memory by not keeping infinite history!
+        if len(self.history) >= self.LEN_MAX_HISTORY:
+            self.history.pop(0)
+
+        # Set the core variables of this class to the values of the new component
+        self.x = component.x
+        self.y = component.y
+        self.width = component.width
+        self.height = component.height
+        self.area = component.area
+        self.geometry = component.geometry
+        self.lastUpdate = time.time()
+
+    def update_component(self, ID, matrixH):
+        self.lastUpdate = time.time()
+        self.ID = ID
+
+        # Appending own matrix into history
+        self.history.append(matrixH)
+
+        # Saving memory by not keeping infinite history!
+        if len(self.history) >= self.LEN_MAX_HISTORY:
+            self.history.pop(0)
+
+    def check_similarity_single(self, input_class) -> int:
+        self.matrix = self.generate_matrix()
+        inputMatrix = input_class.generate_matrix()
+        
+        bufferArray = np.abs(inputMatrix - self.matrix)
+        mean = np.fix(np.mean(bufferArray)) 
+
+        return mean
+
+    def check_similarity_array(self, input_array, max_difference):
+        similarityList = []
+        
+        # We want to figure out which component in an array is the most similar to this class!
+        for i, component in enumerate(input_array):
+            mean = self.check_similarity_single(component)
+
+            # Check if the mean is below the maximum allowed difference between arrays.
+            if mean <= max_difference and mean != None:
+                similarityList.append(np.array([i, mean]))
+
+        # Converting the list to a numpy array and sorting it | lower values represent higher similarity | return the most similar value
+        similarityArray = np.array(similarityList)
+
+        try:
+            similarityArray = similarityArray[np.argsort(similarityArray[:, 1])]
+        except IndexError:
+            pass   # NOTE: There might still be an dimension error . indexerror with less than 2 components ¯\(o_o)/¯ 
+
+        if len(similarityArray) > 0:
+            return similarityArray[0, 0], similarityArray[0, 1]
         else:
-            buffer = frame
-
-        if contrast != 0:
-            contrastAlpha = float(131 * (contrast + 127)) / (127 * (131 - contrast))
-            contrastGamma = 127 * (1 - contrastAlpha)
-            
-            buffer = cv2.addWeighted(buffer, contrastAlpha, buffer, 0, contrastGamma)
-
-        return buffer
+            return None
 
 
 if __name__ == '__main__':
