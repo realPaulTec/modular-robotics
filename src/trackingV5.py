@@ -18,7 +18,7 @@ class systemTrack:
         self.brightnessAdjustment = brightnessAdjustment
 
         self.frame = None
-        self.refined_components = []
+        self.refinedComponents = []
 
         self.thresholdRedMax = 255
         self.thresholdRedMin = 230
@@ -76,7 +76,7 @@ class systemTrack:
         frameCC = self.color_correction(frame)
 
         # Masking the frame based on mask settings
-        frameMK, canvasFrame = self.set_mask(frameCC, canvasFrame)
+        frameMK, canvasFrame = self.set_mask(frameCC, canvasFrame, self.refinedComponents)
 
         # Turning all images into grayscale
         images = self.processing_images(frameMK)
@@ -107,17 +107,17 @@ class systemTrack:
         connectedComponentsStats = cv2.connectedComponentsWithStats(threshold, 1, cv2.CV_32S)
 
         # Refining the components into component classes 
-        refinedComponents = self.refine_components(connectedComponentsStats)
+        self.refinedComponents = self.refine_components(connectedComponentsStats)
 
 
         # ===== Rendering =========================================
         # Rendering green boxes where components were detected!
-        canvasFrame = self.render_components(refinedComponents, canvasFrame)
+        canvasFrame = self.render_components(self.refinedComponents, canvasFrame)
 
         # Setting the final result to the frame history!
         self.frameHistory["final"] = canvasFrame
 
-        return frame, refinedComponents, self.frameHistory
+        return frame, self.refinedComponents, self.frameHistory
 
     def color_correction(self, frame):
         frameCC = IPutils.adjustSaturation(frame, self.saturationAdjustment)
@@ -126,14 +126,14 @@ class systemTrack:
 
         return frameCC
 
-    def set_mask(self, frame, canvasFrame):
-        if len(self.refined_components) > 0:
+    def set_mask(self, frame, canvasFrame, components):
+        if len(components) > 0:
             # Using first track coordinates as mask coordinates
-            x, y = self.refined_components[0].x, self.refined_components[0].y
+            x, y = components[0].x, components[0].y
             coordinates = (int(x), int(y))
 
             # Using first track dimensions as mask radius
-            (width, height) = self.refined_components[0].width, self.refined_components[0].height
+            (width, height) = components[0].width, components[0].height
             extents = (int(width), int(height))
         else:
             # Using video center as mask coordinates
