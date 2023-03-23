@@ -9,10 +9,6 @@ class Component:
     def __init__(self, x, y, w, h, a, g):
         # ===== Constants =========================================
         self.LEN_MAX_HISTORY = 10
-        
-        # Giving each class a unique ID
-        self.ID = Component.ID
-        Component.ID += 1
 
         # Initializing this component
         self.x = x
@@ -24,6 +20,8 @@ class Component:
 
         self.lastUpdate = time.time()
         self.matrix = self.generate_matrix()
+
+        self.ID = None
 
         self.history = []
 
@@ -79,3 +77,7 @@ class Component:
             return similarityArray[0, 0], similarityArray[0, 1]
         else:
             return None
+
+    def generate_id(self):
+        self.ID = Component.ID
+        Component.ID += 1

@@ -205,17 +205,20 @@ class LiDAR:
         if len(self.LiDARcomponents) > 0:
             filteredComponents = self.filter(componentsN)
         else:
+            for component in componentsN:
+                component.generate_id()
+
             self.LiDARcomponents = componentsN
-            filteredComponents = self.LiDARcomponents
+            filteredComponents = componentsN
 
         # Making a new matrix to drawn on with the filtered components!
         canvasMatrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X)).astype(np.int16)
 
-        for i, component in enumerate(filteredComponents): # TODO: Give every class a unique ID which will be preserved over the generations and is the seed for a random color!
+        for i, component in enumerate(filteredComponents):
             print(f"COMPONENT {component.ID}: \n x: {component.x} | y: {component.y} | width: {component.width} | height: {component.height}")
 
             brush = component.geometry
-            brush[brush > 0] = component.ID
+            brush[brush > 0] = component.ID % 255
 
             canvasMatrix += brush
 
@@ -228,28 +231,19 @@ class LiDAR:
         
         for component in self.LiDARcomponents:
             # Get the index of the most similar historical component to the current component | TODO: Fix duplicates which are similar to two different historical arrays!
-            simOutput = component.check_similarity_array(componentsN, self.MAX_MATRIX_DIFFERENCE)
+            simOutput = component.check_similarity_array(componentsN)
             
             # Pass the component to the next generation if it has found a child!
-            if simOutput != None:
-                index, similarity = simOutput
+            if simOutput != None and simOutput[1] <= self.MAX_MATRIX_DIFFERENCE:
+                closestComponent = componentsN[int(simOutput[0])]
+                closestComponent.update_component(component.ID, component.generate_matrix())
 
-                print(similarity)
-
-                # Actually pass it to the next generation!
-                componentsN[int(index)].update_component(component.ID, component.generate_matrix())
-
-                elementList.append(component)
-            # Append old component if id doesn't have a child | There is a max lifetime after which the historical component will be discarded! 
-            elif (time.time() - component.lastUpdate) <= self.MAX_LIFETIME_SECONDS:
-                elementList.append(component)
-            
-            else:
-                print(f'Component: {component.ID} has been terminated.')
+                elementList.append(closestComponent)
 
         # Appending all new components!
         for component in componentsN:
             if component not in elementList:
+                component.generate_id()
                 elementList.append(component)
 
         # Set the new updated components!
