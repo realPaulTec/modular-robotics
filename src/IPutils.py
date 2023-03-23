@@ -1,3 +1,5 @@
+#!../.venv/bin/python3.11
+
 import numpy as np
 import cv2
 

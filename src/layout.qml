@@ -589,7 +589,7 @@ ApplicationWindow {
                                     width: 40
                                     
                                     Layout.fillWidth: true
-                                    value: 4
+                                    value: 20
 
                                     onValueChanged: signalHandeler.setMaxDifference(value)
 
@@ -603,15 +603,18 @@ ApplicationWindow {
                                     id: lifetimeSpinBox
                                     
                                     width: 40
+                                    stepSize: 1
                                     
                                     Layout.fillWidth: true
-                                    value: 4
+                                    value: 1
 
-                                    onValueChanged: signalHandeler.setLifetime(value)
+                                    onValueChanged: {
+                                        signalHandeler.setLifetime(value)
+                                    }
 
                                     ToolTip {
                                         visible: lifetimeSpinBox.hovered
-                                        text: 'Component Lifetime'
+                                        text: 'Component Lifetime 0.1 s'
                                     }
                                 }
                             }

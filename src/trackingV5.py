@@ -1,5 +1,6 @@
 #!../.venv/bin/python3.11
 
+from component import Component
 import numpy as np
 import time
 import cv2
@@ -41,7 +42,7 @@ class systemTrack:
 
         self.trackComponents = []
 
-        self.MAX_MATRIX_DIFFERENCE = 2000
+        self.MAX_MATRIX_DIFFERENCE = 20
         self.MAX_LIFETIME_SECONDS = 4
 
         self.frameHistory = {
@@ -62,6 +63,8 @@ class systemTrack:
         }
 
     def mainCycle(self):
+        print('=== NEW =========================== NEW ===')
+
         # ===== Reading Camera ====================================
         stream = self.video.read()
         frame = stream[1]
@@ -107,7 +110,14 @@ class systemTrack:
         connectedComponentsStats = cv2.connectedComponentsWithStats(threshold, 1, cv2.CV_32S)
 
         # Refining the components into component classes 
-        self.refinedComponents = self.refine_components(connectedComponentsStats)
+        componentsN = self.refine_components(connectedComponentsStats)
+
+        # Filtering the LiDAR components, compared to their historical counterparts. 
+        if len(self.trackComponents) > 0:
+            self.refinedComponents = self.filter_components(componentsN)
+        else:
+            self.trackComponents = componentsN
+            self.refinedComponents = self.trackComponents
 
 
         # ===== Rendering =========================================
@@ -224,48 +234,37 @@ class systemTrack:
 
         componentsN = np.array(componentsN)
 
-        # Filtering the LiDAR components, compared to their historical counterparts. 
-        if len(self.trackComponents) > 0:
-            filteredComponents = self.filter_components(componentsN)
-        else:
-            self.trackComponents = componentsN
-            filteredComponents = self.trackComponents
-
-        return filteredComponents
+        return componentsN
     
     def filter_components(self, componentsN):
         elementList = []
         
         for component in self.trackComponents:
             # Get the index of the most similar historical component to the current component | TODO: Fix duplicates which are similar to two different historical arrays!
-            simOutput = component.check_similarity_array(componentsN, self.MAX_MATRIX_DIFFERENCE)
+            simOutput = component.check_similarity_array(componentsN)
             
             # Pass the component to the next generation if it has found a child!
             if simOutput != None:
                 index, similarity = simOutput
 
-                print(similarity)
-
                 # Actually pass it to the next generation!
-                componentsN[int(index)].update_component(component.ID, component.generate_matrix())
+                if similarity <= self.MAX_MATRIX_DIFFERENCE:
+                    componentsN[int(index)].update_component(component.ID, component.generate_matrix())
+                    elementList.append(componentsN[int(index)])
 
-                elementList.append(component)
-            # Append old component if id doesn't have a child | There is a max lifetime after which the historical component will be discarded! 
-            elif (time.time() - component.lastUpdate) <= self.MAX_LIFETIME_SECONDS:
-                elementList.append(component)
-            
-            else:
-                print(f'Component: {component.ID} has been terminated.')
+                    # print(f'Child found for Component: {component.ID}')
+                else:
+                    print(f'Dropped: {component.ID} for Similarity: {similarity}') # NOTE: The component area is massive, so it has a large impact! I HAVE to implement weight! For now the area will be dropped in the MATRIX!!!
 
         # Appending all new components!
         for component in componentsN:
             if component not in elementList:
                 elementList.append(component)
 
-                print('new comp')
-
         # Set the new updated components!
         self.trackComponents = np.array(elementList)
+
+        print(f"There are {len(self.trackComponents)} components!")
 
         return self.trackComponents
 
@@ -274,103 +273,6 @@ class systemTrack:
             cv2.rectangle(canvasFrame, (component.x, component.y), (component.x + component.width, component.y + component.height), (0, 255, 0), 3)
 
         return canvasFrame
-
-
-class Component:
-    ID = 1
-
-    def __init__(self, x, y, w, h, a, g):
-        # ===== Constants =========================================
-        self.LEN_MAX_HISTORY = 10
-        
-        # Giving each class a unique ID
-        self.ID = Component.ID
-        Component.ID += 1
-
-        # Initializing this component
-        self.x = x
-        self.y = y
-        self.width = w
-        self.height = h
-        self.area = a
-        self.geometry = g
-
-        self.lastUpdate = time.time()
-        self.matrix = self.generate_matrix()
-
-        self.history = []
-
-    def generate_matrix(self):
-        matrix = np.array([
-            self.x,
-            self.y,
-            self.width,
-            self.height,
-            self.area
-        ])
-        
-        return matrix
-    
-    def set_to_other(self, component):
-        # Appending own matrix into history
-        self.history.append(self.matrix)
-
-        # Saving memory by not keeping infinite history!
-        if len(self.history) >= self.LEN_MAX_HISTORY:
-            self.history.pop(0)
-
-        # Set the core variables of this class to the values of the new component
-        self.x = component.x
-        self.y = component.y
-        self.width = component.width
-        self.height = component.height
-        self.area = component.area
-        self.geometry = component.geometry
-        self.lastUpdate = time.time()
-
-    def update_component(self, ID, matrixH):
-        self.lastUpdate = time.time()
-        self.ID = ID
-
-        # Appending own matrix into history
-        self.history.append(matrixH)
-
-        # Saving memory by not keeping infinite history!
-        if len(self.history) >= self.LEN_MAX_HISTORY:
-            self.history.pop(0)
-
-    def check_similarity_single(self, input_class) -> int:
-        self.matrix = self.generate_matrix()
-        inputMatrix = input_class.generate_matrix()
-        
-        bufferArray = np.abs(inputMatrix - self.matrix)
-        mean = np.fix(np.mean(bufferArray)) 
-
-        return mean
-
-    def check_similarity_array(self, input_array, max_difference):
-        similarityList = []
-        
-        # We want to figure out which component in an array is the most similar to this class!
-        for i, component in enumerate(input_array):
-            mean = self.check_similarity_single(component)
-
-            # Check if the mean is below the maximum allowed difference between arrays.
-            if mean <= max_difference and mean != None:
-                similarityList.append(np.array([i, mean]))
-
-        # Converting the list to a numpy array and sorting it | lower values represent higher similarity | return the most similar value
-        similarityArray = np.array(similarityList)
-
-        try:
-            similarityArray = similarityArray[np.argsort(similarityArray[:, 1])]
-        except IndexError:
-            pass   # NOTE: There might still be an dimension error . indexerror with less than 2 components ¯\(o_o)/¯ 
-
-        if len(similarityArray) > 0:
-            return similarityArray[0, 0], similarityArray[0, 1]
-        else:
-            return None
 
 
 if __name__ == '__main__':

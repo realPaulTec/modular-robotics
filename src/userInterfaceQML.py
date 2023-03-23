@@ -133,9 +133,9 @@ class SignalHandeler(QObject):
 
         self.maskSelection = True
         self.erosionSteps = 4
-        self.lifetime = 4
+        self.lifetime = 0.1
 
-        self.maxDifference = 10
+        self.maxDifference = 20
 
     @Slot(str)
     def radioSignal(self, incoming):
@@ -144,7 +144,6 @@ class SignalHandeler(QObject):
     @Slot(str)
     def dropDown(self, incoming):
         self.dropdownSelection = self.frameHistory[int(incoming)]
-        print(self.dropdownSelection)
 
     @Slot(str)
     def buttonMaskSelection(self, incoming):
@@ -208,7 +207,7 @@ class SignalHandeler(QObject):
 
     @Slot(str)
     def setLifetime(self, incoming):
-        self.lifetime = int(incoming)
+        self.lifetime = int(incoming) / 10
 
 
 class ImageProvider(QQuickImageProvider):

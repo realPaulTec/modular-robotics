@@ -1,13 +1,13 @@
 #!../.venv/bin/python3.11
 
+from component import Component
+import matplotlib.pyplot as plt
+import numpy as np
 import pyrplidar
 import time
 import atexit
 import threading
 import cv2
-
-import matplotlib.pyplot as plt
-import numpy as np
 
 font = {'family' : 'URW Gothic',
         'weight' : 'bold',
@@ -48,6 +48,8 @@ class LiDAR:
         # How similar do two matrices have to be to be considered one?
         # NOTE: Implement WEIGHT!
         self.MAX_MATRIX_DIFFERENCE = 4
+
+        self.MAX_LIFETIME_SECONDS = 0.4
 
         # ===== UI constants ======================================
 
@@ -232,101 +234,28 @@ class LiDAR:
             if simOutput != None:
                 index, similarity = simOutput
 
-                # Actually pass it to the next generation!
-                component.set_to_other(componentsN[int(index)])
-                elementList.append(component)
-            # Append NEW components
-            else:
-                elementList.append(component)
+                print(similarity)
 
+                # Actually pass it to the next generation!
+                componentsN[int(index)].update_component(component.ID, component.generate_matrix())
+
+                elementList.append(component)
+            # Append old component if id doesn't have a child | There is a max lifetime after which the historical component will be discarded! 
+            elif (time.time() - component.lastUpdate) <= self.MAX_LIFETIME_SECONDS:
+                elementList.append(component)
+            
+            else:
+                print(f'Component: {component.ID} has been terminated.')
+
+        # Appending all new components!
+        for component in componentsN:
+            if component not in elementList:
+                elementList.append(component)
 
         # Set the new updated components!
         self.LiDARcomponents = np.array(elementList)
 
         return self.LiDARcomponents
-
-class Component:
-    ID = 1
-
-    def __init__(self, x, y, w, h, a, g):
-        # ===== Constants =========================================
-        self.LEN_MAX_HISTORY = 10
-        
-        # Giving each class a unique ID
-        self.ID = Component.ID
-        Component.ID += 1
-
-        # Initializing this component
-        self.x = x
-        self.y = y
-        self.width = w
-        self.height = h
-        self.area = a
-        self.geometry = g
-
-        self.matrix = self.generate_matrix()
-
-        self.history = []
-
-    def generate_matrix(self):
-        matrix = np.array([
-            self.x,
-            self.y,
-            self.width,
-            self.height,
-            self.area
-        ])
-        
-        return matrix
-    
-    def set_to_other(self, component):
-        # Appending own matrix into history
-        self.history.append(self.matrix)
-
-        # Saving memory by not keeping infinite history!
-        if len(self.history) >= self.LEN_MAX_HISTORY:
-            self.history.pop(0)
-
-        # Set the core variables of this class to the values of the new component
-        self.x = component.x
-        self.y = component.y
-        self.width = component.width
-        self.height = component.height
-        self.area = component.area
-        self.geometry = component.geometry
-
-    def check_similarity_single(self, input_class) -> int:
-        self.matrix = self.generate_matrix()
-        inputMatrix = input_class.generate_matrix()
-        
-        bufferArray = np.abs(inputMatrix - self.matrix)
-        mean = np.fix(np.mean(bufferArray)) 
-
-        return mean
-
-    def check_similarity_array(self, input_array, max_difference):
-        similarityList = []
-        
-        # We want to figure out which component in an array is the most similar to this class!
-        for i, component in enumerate(input_array):
-            mean = self.check_similarity_single(component)
-
-            # Check if the mean is below the maximum allowed difference between arrays.
-            if mean <= max_difference and mean != None:
-                similarityList.append(np.array([i, mean]))
-
-        # Converting the list to a numpy array and sorting it | lower values represent higher similarity | return the most similar value
-        similarityArray = np.array(similarityList)
-
-        try:
-            similarityArray = similarityArray[np.argsort(similarityArray[:, 1])]
-        except IndexError:
-            pass   # NOTE: There might still be an dimension error . indexerror with less than 2 components ¯\(o_o)/¯ 
-
-        if len(similarityArray) > 0:
-            return similarityArray[0, 0], similarityArray[0, 1]
-        else:
-            return None
 
 
 currentLiDAR = LiDAR()
