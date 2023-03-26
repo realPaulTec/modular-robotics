@@ -45,6 +45,10 @@ class systemTrack:
         self.MAX_MATRIX_DIFFERENCE = 20
         self.MAX_LIFETIME_SECONDS = 4
 
+        self.wCoordinates = 1
+        self.wBounds = 1
+        self.wArea = 1
+
         self.frameHistory = {
             "camera feed" : None,
             "color corrected" : None,
@@ -63,9 +67,10 @@ class systemTrack:
         }
 
     def mainCycle(self):
-        print('=== NEW =========================== NEW ===')
+        # print('=== NEW =========================== NEW ===')
 
         # ===== Reading Camera ====================================
+
         stream = self.video.read()
         frame = stream[1]
 
@@ -75,6 +80,7 @@ class systemTrack:
 
 
         # ===== Color Processing ==================================
+
         # Applying color correction
         frameCC = self.color_correction(frame)
 
@@ -86,6 +92,7 @@ class systemTrack:
 
 
         # ===== Applying Thresholds ===============================
+
         thresholds = []
 
         # Setting the min and max thresholds for the BGR images!  
@@ -103,6 +110,7 @@ class systemTrack:
 
 
         # ===== Component Tracking ================================
+
         # Tracking the individual components in an array
         threshold = self.processing_thresholds(thresholds, frame)
 
@@ -110,22 +118,24 @@ class systemTrack:
         connectedComponentsStats = cv2.connectedComponentsWithStats(threshold, 1, cv2.CV_32S)
 
         # Refining the components into component classes 
-        componentsN = self.refine_components(connectedComponentsStats)
+        newComponents = self.refine_components(connectedComponentsStats)
 
-        # Filtering the LiDAR components, compared to their historical counterparts. 
+        # FIXME: # Filtering the LiDAR components, compared to their historical counterparts. 
         if len(self.trackComponents) > 0:
-            self.refinedComponents = self.filter_components(componentsN)
+            self.refinedComponents = self.filter_components(newComponents)
         else:
-            self.trackComponents = componentsN
+            self.trackComponents = newComponents
             self.refinedComponents = self.trackComponents
 
 
         # ===== Rendering =========================================
+
         # Rendering green boxes where components were detected!
         canvasFrame = self.render_components(self.refinedComponents, canvasFrame)
 
         # Setting the final result to the frame history!
-        self.frameHistory["final"] = canvasFrame
+        self.frameHistory["final"] = np.array(canvasFrame)
+
 
         return frame, self.refinedComponents, self.frameHistory
 
@@ -185,14 +195,14 @@ class systemTrack:
 
     def processing_thresholds(self, thresholds, frame):
         # Get the thresholds
-        threshold = thresholds[self.targetChannel]    
+        threshold = np.array(thresholds[self.targetChannel])
 
         # Subtracting white threshold to avoid tracking bright lights maxing out all BGR channels
         if not self.targetChannel == 3:
             for i, currentThreshold in enumerate(thresholds):
                 if not np.array_equiv(thresholds[self.targetChannel], currentThreshold):
                     currentThreshold = cv2.dilate(currentThreshold, None, iterations = self.dilationSteps[i])
-                    thresholds[i] = currentThreshold
+                    thresholds[i] = np.array(currentThreshold)
 
                     threshold -= (currentThreshold)
 
@@ -203,17 +213,17 @@ class systemTrack:
         thresholdClean = cv2.threshold(thresholdClean, 200, 255, cv2.THRESH_BINARY)[1]
 
         # Showing the results of this step in the frame history.
-        self.frameHistory["thresholding blue"] = thresholds[0]
-        self.frameHistory["thresholding green"] = thresholds[1]
-        self.frameHistory["thresholding red"] = thresholds[2]
-        self.frameHistory["thresholding white"] = thresholds[3]
-        self.frameHistory["combination"] = threshold
-        self.frameHistory["tracking image"] = thresholdClean
+        self.frameHistory["thresholding blue"] = np.array(thresholds[0])
+        self.frameHistory["thresholding green"] = np.array(thresholds[1])
+        self.frameHistory["thresholding red"] = np.array(thresholds[2])
+        self.frameHistory["thresholding white"] = np.array(thresholds[3])
+        self.frameHistory["combination"] = np.array(threshold)
+        self.frameHistory["tracking image"] = np.array(thresholdClean)
 
         return thresholdClean
     
     def refine_components(self, componentsTRK):
-        componentsN = []
+        newComponents = []
 
         # Getting statistics about those islands
         components = componentsTRK[2]
@@ -230,43 +240,41 @@ class systemTrack:
                 np.array((componentsTRK[1] == (i + 1)).astype(np.uint8))    # Geometry (matrix)
             )
                 
-            componentsN.append(component)
+            newComponents.append(component)
 
-        componentsN = np.array(componentsN)
-
-        return componentsN
+        return newComponents
     
-    def filter_components(self, componentsN):
-        elementList = []
+    def filter_components(self, newComponents):
+        newComponents = np.array(newComponents)
+
+        # Unify similar components from the current cycle
+        for component in newComponents:
+            # Get index and difference from the closest component to the current one
+            index, difference = component.check_similarity_array(newComponents, self.wCoordinates, self.wArea, self.wBounds)
+
+            # Check for (and delete) duplicate component
+            if index != None and difference != None and difference <= self.MAX_MATRIX_DIFFERENCE:
+                np.delete(newComponents, int(index), 0)
         
+    
         for component in self.trackComponents:
-            # Get the index of the most similar historical component to the current component | TODO: Fix duplicates which are similar to two different historical arrays!
-            simOutput = component.check_similarity_array(componentsN)
-            
-            # Pass the component to the next generation if it has found a child!
-            if simOutput != None:
-                index, similarity = simOutput
+            index, difference = component.check_similarity_array(newComponents, self.wCoordinates, self.wArea, self.wBounds)
 
-                # Actually pass it to the next generation!
-                if similarity <= self.MAX_MATRIX_DIFFERENCE:
-                    componentsN[int(index)].update_component(component.ID, component.generate_matrix())
-                    elementList.append(componentsN[int(index)])
+            if index != None and difference != None and difference <= self.MAX_MATRIX_DIFFERENCE:
+                newComponents[int(index)].update_component(component.ID, difference)
 
-                    # print(f'Child found for Component: {component.ID}')
-                else:
-                    print(f'Dropped: {component.ID} for Similarity: {similarity}') # NOTE: The component area is massive, so it has a large impact! I HAVE to implement weight! For now the area will be dropped in the MATRIX!!!
+            elif time.time() - component.lastUpdate < self.MAX_LIFETIME_SECONDS:
+                newComponents = np.append(newComponents, component)
 
-        # Appending all new components!
-        for component in componentsN:
-            if component not in elementList:
-                elementList.append(component)
+            else:
+                print(f"DROPPED CMP: {component.ID} for DFF: {difference}")
 
-        # Set the new updated components!
-        self.trackComponents = np.array(elementList)
+        self.trackComponents = np.array(newComponents)
 
-        print(f"There are {len(self.trackComponents)} components!")
+        print(f"There are {len(self.trackComponents)} component(s)!")
 
         return self.trackComponents
+
 
     def render_components(self, components, canvasFrame):
         for component in components:

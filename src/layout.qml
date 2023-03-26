@@ -17,7 +17,7 @@ ApplicationWindow {
     Material.theme: Material.Dark
     Material.accent: Material.Blue
 
-    color: '#171717'
+    color: '#121212'
 
     Control {
         anchors.fill: parent
@@ -496,131 +496,309 @@ ApplicationWindow {
                 height: 20
             }
 
-            RowLayout {
-                Layout.fillHeight: true
-                anchors.margins: 20
+            // RowLayout {
+            //     Layout.fillHeight: true
+            //     anchors.margins: 20
 
+            //     height: 220
+
+            //     Rectangle {
+            //         Layout.fillHeight: true
+            //         Layout.fillWidth: true
+
+            //         color: '#00000000'
+
+            //         radius: 20
+            //         border.color: '#393E46'
+            //         border.width: 2
+
+            //         Control {
+            //             anchors.fill: parent
+            //             anchors.margins: 20
+
+            //             Column {
+            //                 width: 200
+            //                 // height: parent.height / 2
+            //                 spacing: 10
+
+            //                 Rectangle {
+            //                     anchors.fill: parent
+            //                     color: "#ffffff"
+            //                 }
+                            
+            //                 // ComboBox {
+            //                 //     Layout.fillWidth: true
+            //                 //     width: 200
+
+            //                 //     model: [
+            //                 //         "camera feed",
+            //                 //         "color corrected",
+            //                 //         "masked frame",
+            //                 //         "blue image",
+            //                 //         "green image",
+            //                 //         "red image",
+            //                 //         "white image",
+            //                 //         "thresholding blue",
+            //                 //         "thresholding green",
+            //                 //         "thresholding red",
+            //                 //         "thresholding white",
+            //                 //         "combination",
+            //                 //         "tracking image",
+            //                 //         "final"                
+            //                 //     ]
+
+            //                 //     currentIndex: 13
+
+            //                 //     onCurrentIndexChanged: signalHandeler.dropDown(currentIndex)
+            //                 // } 
+                            
+            //                 // RowLayout {
+            //                 //     Text {
+            //                 //         Layout.alignment: Qt.AlignVCenter
+                                    
+            //                 //         font.pointSize: 12
+            //                 //         text: 'Use Mask: '
+            //                 //         color: '#FFFFFF'
+            //                 //     }
+
+            //                 //     Switch {
+            //                 //         Layout.alignment: Qt.AlignHCenter
+            //                 //         Layout.fillWidth: true
+
+            //                 //         position: 1
+
+            //                 //         onCheckedChanged: signalHandeler.buttonMaskSelection(position)
+            //                 //     }
+            //                 // }
+                            
+            //                 // RowLayout {
+            //                 //     SpinBox {
+            //                 //         id: erosionSpinBox
+                                    
+            //                 //         width: 40
+                                    
+            //                 //         Layout.fillWidth: true
+            //                 //         value: 4
+
+            //                 //         onValueChanged: signalHandeler.erosionSelection(value)
+
+            //                 //         ToolTip {
+            //                 //             visible: erosionSpinBox.hovered
+            //                 //             text: 'Erosion Steps'
+            //                 //         }
+            //                 //     }
+            //                 // }
+            //             }
+
+            //             Column {
+            //                 width: 200
+            //                 // height: parent.height / 2
+            //                 spacing: 10
+
+            //                 Rectangle {
+            //                     anchors.fill: parent
+            //                     color: "#ffffff"
+            //                 }
+            //             }
+            //         }
+            //     }
+            // }
+
+            RowLayout {
+                spacing: 40
+                width: parent.width
                 height: 220
 
                 Rectangle {
                     Layout.fillHeight: true
                     Layout.fillWidth: true
+                    color: "#1c1c1c"
+                    radius: 10
 
-                    color: '#00000000'
-
-                    radius: 20
-                    border.color: '#393E46'
-                    border.width: 2
-
-                    Control {
+                    ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 20
 
-                        Column {
-                            width: 400
-                            height: parent.height / 2
-                            spacing: 10
+                        ComboBox {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+
+                            model: [
+                                "camera feed",
+                                "color corrected",
+                                "masked frame",
+                                "blue image",
+                                "green image",
+                                "red image",
+                                "white image",
+                                "thresholding blue",
+                                "thresholding green",
+                                "thresholding red",
+                                "thresholding white",
+                                "combination",
+                                "tracking image",
+                                "final"                
+                            ]
+
+                            currentIndex: 13
+
+                            onCurrentIndexChanged: signalHandeler.dropDown(currentIndex)
+                        }
+
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
                             
-                            ComboBox {
-                                Layout.fillWidth: true
-                                width: 200
+                            Text {
+                                Layout.alignment: Qt.AlignLeft
 
-                                model: [
-                                    "camera feed",
-                                    "color corrected",
-                                    "masked frame",
-                                    "blue image",
-                                    "green image",
-                                    "red image",
-                                    "white image",
-                                    "thresholding blue",
-                                    "thresholding green",
-                                    "thresholding red",
-                                    "thresholding white",
-                                    "combination",
-                                    "tracking image",
-                                    "final"                
-                                ]
-
-                                currentIndex: 13
-
-                                onCurrentIndexChanged: signalHandeler.dropDown(currentIndex)
+                                font.pointSize: 12
+                                text: 'Use Mask: '
+                                color: '#FFFFFF'
                             }
 
-                            RowLayout {
-                                Text {
-                                    Layout.alignment: Qt.AlignVCenter
-                                    
-                                    font.pointSize: 12
-                                    text: 'Use Mask: '
-                                    color: '#FFFFFF'
-                                }
+                            Switch {
+                                Layout.alignment: Qt.AlignRight
+                                position: 1
 
-                                Switch {
-                                    Layout.alignment: Qt.AlignHCenter
-                                    Layout.fillWidth: true
-
-                                    position: 1
-
-                                    onCheckedChanged: signalHandeler.buttonMaskSelection(position)
-                                }
+                                onCheckedChanged: signalHandeler.buttonMaskSelection(position)
                             }
+                        }
 
-                            RowLayout {
-                                SpinBox {
-                                    id: erosionSpinBox
-                                    
-                                    width: 40
-                                    
-                                    Layout.fillWidth: true
-                                    value: 4
+                        SpinBox {
+                            id: erosionSpinBox
+                            
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
 
-                                    onValueChanged: signalHandeler.erosionSelection(value)
+                            value: 4
 
-                                    ToolTip {
-                                        visible: erosionSpinBox.hovered
-                                        text: 'Erosion Steps'
-                                    }
-                                }
-                                
-                                SpinBox {
-                                    id: differenceSpinBox
-                                    
-                                    width: 40
-                                    
-                                    Layout.fillWidth: true
-                                    value: 20
+                            onValueChanged: signalHandeler.erosionSelection(value)
 
-                                    onValueChanged: signalHandeler.setMaxDifference(value)
-
-                                    ToolTip {
-                                        visible: differenceSpinBox.hovered
-                                        text: 'Max Difference'
-                                    }
-                                }
-
-                                SpinBox {
-                                    id: lifetimeSpinBox
-                                    
-                                    width: 40
-                                    stepSize: 1
-                                    
-                                    Layout.fillWidth: true
-                                    value: 1
-
-                                    onValueChanged: {
-                                        signalHandeler.setLifetime(value)
-                                    }
-
-                                    ToolTip {
-                                        visible: lifetimeSpinBox.hovered
-                                        text: 'Component Lifetime 0.1 s'
-                                    }
-                                }
+                            ToolTip {
+                                visible: erosionSpinBox.hovered
+                                text: 'Erosion Steps'
                             }
                         }
                     }
+                }
 
+                Rectangle {
+                    Layout.fillHeight: true
+                    Layout.fillWidth: true
+                    color: "#1c1c1c"
+                    radius: 10
+
+                    ColumnLayout {
+                        anchors.fill: parent
+
+                        SpinBox {
+                            id: differenceSpinBox
+
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+
+                            from: 1
+                            to: 2000
+
+                            value: 20
+
+                            onValueChanged: signalHandeler.setMaxDifference(value)
+
+                            ToolTip {
+                                visible: differenceSpinBox.hovered
+                                text: 'Max Difference'
+                            }
+                        }
+                        SpinBox {
+                            id: lifetimeSpinBox
+
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+
+                            stepSize: 1
+                            value: 1
+
+                            onValueChanged: {
+                                signalHandeler.setLifetime(value)
+                            }
+
+                            ToolTip {
+                                visible: lifetimeSpinBox.hovered
+                                text: 'Component Lifetime 0.1 s'
+                            }
+                        }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillHeight: true
+                    Layout.fillWidth: true
+                    color: "#1c1c1c"
+                    radius: 10
+
+                    ColumnLayout {
+                        anchors.fill: parent
+
+                        Slider {
+                            id: weightCoordinatesSlider
+
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+
+                            from: 0
+                            to: 100     
+
+                            onValueChanged: {
+                                signalHandeler.setWeightCoordinates(value)
+                            }
+
+                            ToolTip {
+                                parent: weightCoordinatesSlider.handle
+                                visible: weightCoordinatesSlider.pressed
+                                text: "Weight Coordinates: " + weightCoordinatesSlider.value.toFixed(0)
+                            }                      
+                        }
+
+                        Slider {
+                            id: weightBoundsSlider
+
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+
+                            from: 0
+                            to: 100     
+
+                            onValueChanged: {
+                                signalHandeler.setWeightBounds(value)
+                            }
+
+                            ToolTip {
+                                parent: weightBoundsSlider.handle
+                                visible: weightBoundsSlider.pressed
+                                text: "Weight Bounds: " + weightBoundsSlider.value.toFixed(0)
+                            }                      
+                        }
+
+                        Slider {
+                            id: weightAreaSlider
+
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+
+                            from: 0
+                            to: 100     
+
+                            onValueChanged: {
+                                signalHandeler.setWeightArea(value)
+                            }
+
+                            ToolTip {
+                                parent: weightAreaSlider.handle
+                                visible: weightAreaSlider.pressed
+                                text: "Weight Area: " + weightAreaSlider.value.toFixed(0)
+                            }                      
+                        }
+                    }
                 }
             }
         }

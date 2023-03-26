@@ -47,9 +47,10 @@ class LiDAR:
 
         # How similar do two matrices have to be to be considered one?
         # NOTE: Implement WEIGHT!
-        self.MAX_MATRIX_DIFFERENCE = 4
+        self.MAX_MATRIX_DIFFERENCE = 6
 
-        self.MAX_LIFETIME_SECONDS = 0.4
+        self.MAX_LIFETIME_SECONDS = 1.0
+        self.ACCEPTED_TIME = 0.2
 
         # ===== UI constants ======================================
 
@@ -226,28 +227,23 @@ class LiDAR:
         with self.matrix_lock:
             self.graphingMatrix = canvasMatrix # connectedLiDAR[1]
 
-    def filter(self, componentsN):
-        elementList = []
+    def filter(self, newComponents):
+        # TODO: Implement accepted time | Duplication checking | Optimization!
         
         for component in self.LiDARcomponents:
-            # Get the index of the most similar historical component to the current component | TODO: Fix duplicates which are similar to two different historical arrays!
-            simOutput = component.check_similarity_array(componentsN)
-            
-            # Pass the component to the next generation if it has found a child!
-            if simOutput != None and simOutput[1] <= self.MAX_MATRIX_DIFFERENCE:
-                closestComponent = componentsN[int(simOutput[0])]
-                closestComponent.update_component(component.ID, component.generate_matrix())
+            index, similarity = component.check_similarity_array(newComponents)
 
-                elementList.append(closestComponent)
+            if index != None and similarity != None and similarity <= self.MAX_MATRIX_DIFFERENCE:
+                newComponents[int(index)].update_component(component.ID, similarity)
 
-        # Appending all new components!
-        for component in componentsN:
-            if component not in elementList:
+            elif time.time() - component.lastUpdate < self.MAX_LIFETIME_SECONDS:
+                newComponents = np.append(newComponents, component)  
+
+        for component in newComponents:
+            if component.ID == None:
                 component.generate_id()
-                elementList.append(component)
 
-        # Set the new updated components!
-        self.LiDARcomponents = np.array(elementList)
+        self.LiDARcomponents = np.array(newComponents)
 
         return self.LiDARcomponents
 

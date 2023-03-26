@@ -19,50 +19,46 @@ class Component:
         self.geometry = g
 
         self.lastUpdate = time.time()
-        self.matrix = self.generate_matrix()
+        self.matrix = self.generate_matrix(1 , 1, 1)
 
         self.ID = None
+        self.similarity = 0
 
         self.history = []
 
-    def generate_matrix(self):
+    def generate_matrix(self, wCoordinates, wBounds, wArea):
         matrix = np.array([
-            self.x,
-            self.y,
-            self.width,
-            self.height
+            self.x * wCoordinates,
+            self.y * wCoordinates,
+            self.width * wBounds,
+            self.height * wBounds,
+            self.area * wArea
         ])
         
-        # NOTE: self.area dropped due to filter issues! Implement weight to fix! 
+        # FIXME: self.area dropped due to filter issues! Implement weight to fix! 
 
         return matrix
 
-    def update_component(self, ID, matrixH):
+    def update_component(self, ID, similarity):
         self.lastUpdate = time.time()
+        self.similarity = similarity
         self.ID = ID
 
-        # Appending own matrix into history
-        self.history.append(matrixH)
-
-        # Saving memory by not keeping infinite history!
-        if len(self.history) >= self.LEN_MAX_HISTORY:
-            self.history.pop(0)
-
-    def check_similarity_single(self, input_class) -> int:
-        self.matrix = self.generate_matrix()
-        inputMatrix = input_class.generate_matrix()
+    def check_similarity_single(self, input_class, wCoordinates, wBounds, wArea) -> int:
+        self.matrix = self.generate_matrix(wCoordinates, wBounds, wArea)
+        inputMatrix = input_class.generate_matrix(wCoordinates, wBounds, wArea)
         
         bufferArray = np.abs(inputMatrix - self.matrix)
         mean = np.fix(np.mean(bufferArray)) 
 
         return mean
 
-    def check_similarity_array(self, input_array):
+    def check_similarity_array(self, input_array, wCoordinates, wBounds, wArea):
         similarityList = []
         
         # We want to figure out which component in an array is the most similar to this class!
         for i, component in enumerate(input_array):
-            mean = self.check_similarity_single(component)
+            mean = self.check_similarity_single(component, wCoordinates, wBounds, wArea)
             similarityList.append(np.array([i, mean]))
 
         # Converting the list to a numpy array and sorting it | lower values represent higher similarity | return the most similar value
@@ -76,7 +72,7 @@ class Component:
         if len(similarityArray) > 0:
             return similarityArray[0, 0], similarityArray[0, 1]
         else:
-            return None
+            return None, None
 
     def generate_id(self):
         self.ID = Component.ID

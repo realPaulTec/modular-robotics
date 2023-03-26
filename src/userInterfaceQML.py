@@ -13,8 +13,8 @@ import sys
 import cv2
 
 
-cameraIndex = 1
-tracker = tv5.systemTrack(1)
+cameraIndex = -1
+tracker = tv5.systemTrack(cameraIndex)
 
 class Backend:
     def __init__(self, src, imageProvider) -> None:
@@ -37,7 +37,9 @@ class Backend:
 
     def interfaceCycle(self, kill = False):
         while True:
-            tracker.mainCycle()
+            try:
+                tracker.mainCycle()
+            except 
 
             currentFrame = tracker.frameHistory[self.signalHandeler.dropdownSelection]
 
@@ -72,6 +74,10 @@ class Backend:
 
             tracker.MAX_MATRIX_DIFFERENCE = self.signalHandeler.maxDifference
             tracker.MAX_LIFETIME_SECONDS = self.signalHandeler.lifetime
+
+            tracker.wCoordinates = self.signalHandeler.wCoordinates
+            tracker.wBounds = self.signalHandeler.wBounds
+            tracker.wArea = self.signalHandeler.wArea
             
             # Killing the cycle on the first round
             if kill == True:
@@ -136,6 +142,10 @@ class SignalHandeler(QObject):
         self.lifetime = 0.1
 
         self.maxDifference = 20
+
+        self.wCoordinates = 1
+        self.wBounds = 1
+        self.wArea = 1
 
     @Slot(str)
     def radioSignal(self, incoming):
@@ -208,6 +218,18 @@ class SignalHandeler(QObject):
     @Slot(str)
     def setLifetime(self, incoming):
         self.lifetime = int(incoming) / 10
+
+    @Slot(str)
+    def setWeightCoordinates(self, incoming):
+        self.wCoordinates = float(incoming)
+
+    @Slot(str)
+    def setWeightBounds(self, incoming):
+        self.wBounds = float(incoming)
+
+    @Slot(str)
+    def setWeightArea(self, incoming):
+        self.wArea = float(incoming)
 
 
 class ImageProvider(QQuickImageProvider):
