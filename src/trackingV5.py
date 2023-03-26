@@ -10,6 +10,10 @@ class systemTrack:
     def __init__(self, vcd, targetChannel=0, aqqExtents=(100, 100), saturationAdjustment=1.2, contrastAdjustment=1.02, brightnessAdjustment=0) -> None:
         # Setting up video capture device (camera)
         self.video = cv2.VideoCapture(vcd)
+        
+        if not self.video.isOpened():
+            raise IOError("Cannot open camera")
+
         self.videoDimensions = (self.video.get(cv2.CAP_PROP_FRAME_WIDTH), self.video.get(cv2.CAP_PROP_FRAME_HEIGHT))
 
         self.acquisitionExtents = aqqExtents

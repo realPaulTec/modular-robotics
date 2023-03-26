@@ -9,12 +9,37 @@ from PySide6.QtQuick import *
 
 import trackingV5 as tv5
 import threading
+import subprocess
 import sys
+import os
 import cv2
 
 
-cameraIndex = -1
-tracker = tv5.systemTrack(cameraIndex)
+try:
+    # Get system cameras and show them to the user.
+    result = subprocess.run(["v4l2-ctl", "--list-devices"], capture_output=True, text=True)
+    print("Available Video Devices:\n")
+
+    for camera in result.stdout.split("\n"):
+        print(camera.strip().split("USB Camera (")[-1].strip(")"))
+
+    # Get the users desired video device
+    cameraIndex = input("Video Device: ")
+
+    # Exit if the user input an incorrect camera index!
+    try:
+        tracker = tv5.systemTrack(cameraIndex)
+
+    except IOError:
+        print(f"ERROR: Cannot open Video Device at: {cameraIndex}")
+
+        sys.exit()
+
+except KeyboardInterrupt:
+    print('\n\nExiting on KeyboardInterrupt!')
+
+    sys.exit()
+
 
 class Backend:
     def __init__(self, src, imageProvider) -> None:
@@ -37,9 +62,10 @@ class Backend:
 
     def interfaceCycle(self, kill = False):
         while True:
-            try:
-                tracker.mainCycle()
-            except 
+            # Linux Specific!
+            os.system('clear')
+
+            tracker.mainCycle()
 
             currentFrame = tracker.frameHistory[self.signalHandeler.dropdownSelection]
 
