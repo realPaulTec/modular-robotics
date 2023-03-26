@@ -11,7 +11,6 @@ import trackingV5 as tv5
 import threading
 import subprocess
 import sys
-import os
 import cv2
 
 
@@ -62,9 +61,6 @@ class Backend:
 
     def interfaceCycle(self, kill = False):
         while True:
-            # Linux Specific!
-            os.system('clear')
-
             tracker.mainCycle()
 
             currentFrame = tracker.frameHistory[self.signalHandeler.dropdownSelection]

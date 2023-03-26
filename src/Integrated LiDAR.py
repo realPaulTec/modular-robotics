@@ -51,6 +51,12 @@ class LiDAR:
 
         self.MAX_LIFETIME_SECONDS = 1.0
         self.ACCEPTED_TIME = 0.2
+        
+        # Weight
+        self.wCoordinates = 1
+        self.wBounds = 0.4
+        self.wArea = 0.2
+
 
         # ===== UI constants ======================================
 
@@ -59,6 +65,9 @@ class LiDAR:
 
         # Minimal amount of scans in matrix grid square for the UI
         self.DISPLAY_THRESHOLD = 3
+
+        # ID color range
+        self.MAX_VISUALIZATION = 8
 
         
         # ===== LiDAR setup =======================================
@@ -115,7 +124,7 @@ class LiDAR:
         # Graphing the LiDAR output
         with self.matrix_lock:
             self.matrixVisualization.clear()
-            self.matrixVisualization.imshow(self.graphingMatrix, cmap = self.COLOR_MAP)
+            self.matrixVisualization.imshow(self.graphingMatrix, cmap = self.COLOR_MAP, vmin = 0, vmax = self.MAX_VISUALIZATION)
 
         plt.pause(0.01)
 
@@ -219,7 +228,8 @@ class LiDAR:
             print(f"COMPONENT {component.ID}: \n x: {component.x} | y: {component.y} | width: {component.width} | height: {component.height}")
 
             brush = component.geometry
-            brush[brush > 0] = component.ID % 255
+
+            brush[brush > 0] = component.ID % self.MAX_VISUALIZATION
 
             canvasMatrix += brush
 
@@ -228,22 +238,38 @@ class LiDAR:
             self.graphingMatrix = canvasMatrix # connectedLiDAR[1]
 
     def filter(self, newComponents):
-        # TODO: Implement accepted time | Duplication checking | Optimization!
-        
-        for component in self.LiDARcomponents:
-            index, similarity = component.check_similarity_array(newComponents)
+        newComponents = np.array(newComponents)
 
-            if index != None and similarity != None and similarity <= self.MAX_MATRIX_DIFFERENCE:
-                newComponents[int(index)].update_component(component.ID, similarity)
+        # Unify similar components from the current cycle
+        for component in newComponents:
+            # Get index and difference from the closest component to the current one
+            index, difference = component.check_similarity_array(newComponents, self.wCoordinates, self.wArea, self.wBounds)
+
+            # Check for (and delete) duplicate component
+            if index != None and difference != None and difference <= self.MAX_MATRIX_DIFFERENCE:
+                np.delete(newComponents, int(index), 0)
+        
+    
+        for component in self.LiDARcomponents:
+            index, difference = component.check_similarity_array(newComponents, self.wCoordinates, self.wArea, self.wBounds)
+
+            if index != None and difference != None and difference <= self.MAX_MATRIX_DIFFERENCE:
+                newComponents[int(index)].update_component(component.ID, difference)
 
             elif time.time() - component.lastUpdate < self.MAX_LIFETIME_SECONDS:
-                newComponents = np.append(newComponents, component)  
+                newComponents = np.append(newComponents, component)
 
+            else:
+                pass # print(f"DROPPED CMP: {component.ID} for DFF: {difference}")
+
+        # Generate IDs for all new components
         for component in newComponents:
             if component.ID == None:
                 component.generate_id()
 
         self.LiDARcomponents = np.array(newComponents)
+
+        print(f"There are {len(self.LiDARcomponents)} component(s)!")
 
         return self.LiDARcomponents
 

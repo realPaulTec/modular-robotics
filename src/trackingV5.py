@@ -10,7 +10,7 @@ class systemTrack:
     def __init__(self, vcd, targetChannel=0, aqqExtents=(100, 100), saturationAdjustment=1.2, contrastAdjustment=1.02, brightnessAdjustment=0) -> None:
         # Setting up video capture device (camera)
         self.video = cv2.VideoCapture(vcd)
-        
+
         if not self.video.isOpened():
             raise IOError("Cannot open camera")
 
@@ -271,14 +271,15 @@ class systemTrack:
                 newComponents = np.append(newComponents, component)
 
             else:
-                print(f"DROPPED CMP: {component.ID} for DFF: {difference}")
+                pass
+
+                # print(f"DROPPED CMP: {component.ID} for DFF: {difference}")
 
         self.trackComponents = np.array(newComponents)
 
         print(f"There are {len(self.trackComponents)} component(s)!")
 
         return self.trackComponents
-
 
     def render_components(self, components, canvasFrame):
         for component in components:
