@@ -47,7 +47,7 @@ class systemTrack:
 
         self.erosionSteps = 4
 
-        self.useMask = True
+        self.useMask = False
         self.maskBuffer = 40
 
         self.trackComponents = []
@@ -65,6 +65,8 @@ class systemTrack:
         self.ΔTimeFactorHistory = 1.5
 
         self.ΔTime = 0
+
+        self.closestFrequency = 0
 
         self.frameHistory = {
             "camera feed" : None,
@@ -294,6 +296,8 @@ class systemTrack:
             elif time.time() - component.lastUpdate < self.MAX_LIFETIME_SECONDS:
                 newComponents = np.append(newComponents, component)
 
+        frequencies = []
+
         for component in newComponents:
             # Generate IDs for new components which did not find a parent.
             if component.ID == None:
@@ -303,18 +307,22 @@ class systemTrack:
             if len(component.history) >= self.FREQUENCY_SAMPLES:
                 history = np.array(component.history)
                 median = np.median(history)
-                mean = np.mean(history)
 
-                # print(f"History: {history}\nMedian: {median}\nMean: {mean}")
-                print(f"Frequency: {round(1 / median, 2)} Hz")
-
+                frequencies.append(round(1 / median, 2))
                 component.history = []
 
+        # Get the frequency which is the closest match to the desired one.
+        if len(frequencies) > 0:
+            frequencies = np.array(frequencies)
+            index = (np.abs(frequencies - self.frequency)).argmin()
+
+            if abs(frequencies[index] - self.frequency) <= self.frequencyBuffer:
+                self.closestFrequency = frequencies[index]
+            else:
+                self.closestFrequency = 0.00
 
         # Processed new components are now the historical ones for the next generation!
         self.trackComponents = np.array(newComponents)
-        # print(f"There are {len(self.trackComponents)} component(s)!")
-
         return self.trackComponents
 
     def render_components(self, components, canvasFrame):

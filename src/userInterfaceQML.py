@@ -59,68 +59,85 @@ class Backend:
         # Loading user interface from QML file
         self.engine.load(src)
 
+        # Setting up window context
+        self.windowContext = self.engine.rootObjects()[0]
+
+        # Setting up timer for image updates
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.interfaceCycle)
+        self.timer.start(0)
+
     def interfaceCycle(self, kill = False):
-        while True:
-            tracker.mainCycle()
+        tracker.mainCycle()
 
-            currentFrame = tracker.frameHistory[self.signalHandeler.dropdownSelection]
+        currentFrame = tracker.frameHistory[self.signalHandeler.dropdownSelection]
 
-            # Fixing the image for QML integration
-            interfaceFrame = cv2.cvtColor(currentFrame, cv2.COLOR_BGR2RGB)
-            interfaceFrame = cv2.flip(interfaceFrame, 1)
+        # Fixing the image for QML integration
+        interfaceFrame = cv2.cvtColor(currentFrame, cv2.COLOR_BGR2RGB)
+        interfaceFrame = cv2.flip(interfaceFrame, 1)
 
-            trackingImage = QImage(interfaceFrame, interfaceFrame.shape[1], interfaceFrame.shape[0], interfaceFrame.strides[0], QImage.Format_RGB888)
-            self.imageProvider.updateImage(trackingImage, 'trackingImage')
+        trackingImage = QImage(interfaceFrame, interfaceFrame.shape[1], interfaceFrame.shape[0], interfaceFrame.strides[0], QImage.Format_RGB888)
+        self.imageProvider.updateImage(trackingImage, 'trackingImage')
 
-            tracker.useMask = self.signalHandeler.maskSelection
-            tracker.erosionSteps = self.signalHandeler.erosionSteps
-            tracker.targetChannel = int(self.signalHandeler.targetChannel)
+        tracker.useMask = self.signalHandeler.maskSelection
+        tracker.erosionSteps = self.signalHandeler.erosionSteps
+        tracker.targetChannel = int(self.signalHandeler.targetChannel)
 
-            tracker.dilationSteps[0] = self.signalHandeler.dilationStepsBlue
-            tracker.dilationSteps[1] = self.signalHandeler.dilationStepsGreen
-            tracker.dilationSteps[2] = self.signalHandeler.dilationStepsRed
-            tracker.dilationSteps[3] = self.signalHandeler.dilationStepsBright
+        tracker.dilationSteps[0] = self.signalHandeler.dilationStepsBlue
+        tracker.dilationSteps[1] = self.signalHandeler.dilationStepsGreen
+        tracker.dilationSteps[2] = self.signalHandeler.dilationStepsRed
+        tracker.dilationSteps[3] = self.signalHandeler.dilationStepsBright
 
-            # Providing tracking threshold data
-            tracker.thresholdRedMax = self.signalHandeler.thresholdRedMax
-            tracker.thresholdRedMin = self.signalHandeler.thresholdRedMin
+        # Providing tracking threshold data
+        tracker.thresholdRedMax = self.signalHandeler.thresholdRedMax
+        tracker.thresholdRedMin = self.signalHandeler.thresholdRedMin
 
-            tracker.thresholdGreenMax = self.signalHandeler.thresholdGreenMax
-            tracker.thresholdGreenMin = self.signalHandeler.thresholdGreenMin
+        tracker.thresholdGreenMax = self.signalHandeler.thresholdGreenMax
+        tracker.thresholdGreenMin = self.signalHandeler.thresholdGreenMin
 
-            tracker.thresholdBlueMax = self.signalHandeler.thresholdBlueMax
-            tracker.thresholdBlueMin = self.signalHandeler.thresholdBlueMin
+        tracker.thresholdBlueMax = self.signalHandeler.thresholdBlueMax
+        tracker.thresholdBlueMin = self.signalHandeler.thresholdBlueMin
 
-            tracker.thresholdBrightMax = self.signalHandeler.thresholdBrightMax
-            tracker.thresholdBrightMin = self.signalHandeler.thresholdBrightMin
+        tracker.thresholdBrightMax = self.signalHandeler.thresholdBrightMax
+        tracker.thresholdBrightMin = self.signalHandeler.thresholdBrightMin
 
-            tracker.MAX_MATRIX_DIFFERENCE = self.signalHandeler.maxDifference
-            tracker.MAX_LIFETIME_SECONDS = self.signalHandeler.lifetime
+        tracker.MAX_MATRIX_DIFFERENCE = self.signalHandeler.maxDifference
+        tracker.MAX_LIFETIME_SECONDS = self.signalHandeler.lifetime
 
-            tracker.wCoordinates = self.signalHandeler.wCoordinates
-            tracker.wBounds = self.signalHandeler.wBounds
-            tracker.wArea = self.signalHandeler.wArea
+        tracker.wCoordinates = self.signalHandeler.wCoordinates
+        tracker.wBounds = self.signalHandeler.wBounds
+        tracker.wArea = self.signalHandeler.wArea
 
-            tracker.frequency = self.signalHandeler.frequency
+        tracker.frequency = self.signalHandeler.frequency
+        tracker.frequencyBuffer = self.signalHandeler.frequencyBuffer
+        
+        # Killing the cycle on the first round
+        if kill != True:
+            textAmountComponents = self.windowContext.findChild(QObject, "textAmountComponents")
             
-            # Killing the cycle on the first round
-            if kill == True:
-                break
+            if textAmountComponents is not None:
+                textAmountComponents.setProperty("text", str(len(tracker.trackComponents)))
+            
+            frequencyComponents = self.windowContext.findChild(QObject, "frequencyComponents")
+            
+            if frequencyComponents is not None:
+                frequencyComponents.setProperty("text", f"{tracker.closestFrequency}Hz")
+
 
 class SignalHandeler(QObject):
-    radioButtonSignal = Signal(int)
+    # radioButtonSignal = Signal(int)
 
-    redSliderMaxSignal = Signal(int)
-    redSliderMinSignal = Signal(int)
+    # redSliderMaxSignal = Signal(int)
+    # redSliderMinSignal = Signal(int)
 
-    greenSliderMaxSignal = Signal(int)
-    greenSliderMinSignal = Signal(int)
+    # greenSliderMaxSignal = Signal(int)
+    # greenSliderMinSignal = Signal(int)
 
-    blueSliderMaxSignal = Signal(int)
-    blueSliderMinSignal = Signal(int)
+    # blueSliderMaxSignal = Signal(int)
+    # blueSliderMinSignal = Signal(int)
 
-    brightSliderMaxSignal = Signal(int)
-    brightSliderMinSignal = Signal(int)
+    # brightSliderMaxSignal = Signal(int)
+    # brightSliderMinSignal = Signal(int)
 
     def __init__(self):
         super().__init__()
@@ -161,7 +178,7 @@ class SignalHandeler(QObject):
             "final"
         ]
 
-        self.maskSelection = True
+        self.maskSelection = False
         self.erosionSteps = 4
         self.lifetime = 1.0
 
@@ -172,6 +189,7 @@ class SignalHandeler(QObject):
         self.wArea = 0.8
 
         self.frequency = 0
+        self.frequencyBuffer = 0
 
     @Slot(str)
     def radioSignal(self, incoming):
@@ -259,7 +277,11 @@ class SignalHandeler(QObject):
 
     @Slot(str)
     def setFrequency(self, incoming):
-        self.frequency = int(round(incoming))
+        self.frequency = int(incoming)
+
+    @Slot(str)
+    def setFrequencyBuffer(self, incoming):
+        self.frequencyBuffer = int(incoming)
 
 
 class ImageProvider(QQuickImageProvider):
@@ -277,15 +299,12 @@ class ImageProvider(QQuickImageProvider):
 
 
 if __name__ == "__main__":
+    # Disable stupid warnings
+    QCoreApplication.setAttribute(Qt.AA_DisableHighDpiScaling, True)
+    
     # Application setup
     application = QApplication([])
     applicationBackend = Backend('src/layout.qml', ImageProvider(QQmlImageProviderBase.ImageType.Image))
-
-    # Creating and starting the update thread
-    updateThread = threading.Thread(target = applicationBackend.interfaceCycle)
-    updateThread.daemon = True
-
-    updateThread.start()
 
     # Exiting on window close
     sys.exit(application.exec())

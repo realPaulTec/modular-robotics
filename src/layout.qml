@@ -496,114 +496,6 @@ ApplicationWindow {
                 height: 20
             }
 
-            // RowLayout {
-            //     Layout.fillHeight: true
-            //     anchors.margins: 20
-
-            //     height: 220
-
-            //     Rectangle {
-            //         Layout.fillHeight: true
-            //         Layout.fillWidth: true
-
-            //         color: '#00000000'
-
-            //         radius: 20
-            //         border.color: '#393E46'
-            //         border.width: 2
-
-            //         Control {
-            //             anchors.fill: parent
-            //             anchors.margins: 20
-
-            //             Column {
-            //                 width: 200
-            //                 // height: parent.height / 2
-            //                 spacing: 10
-
-            //                 Rectangle {
-            //                     anchors.fill: parent
-            //                     color: "#ffffff"
-            //                 }
-                            
-            //                 // ComboBox {
-            //                 //     Layout.fillWidth: true
-            //                 //     width: 200
-
-            //                 //     model: [
-            //                 //         "camera feed",
-            //                 //         "color corrected",
-            //                 //         "masked frame",
-            //                 //         "blue image",
-            //                 //         "green image",
-            //                 //         "red image",
-            //                 //         "white image",
-            //                 //         "thresholding blue",
-            //                 //         "thresholding green",
-            //                 //         "thresholding red",
-            //                 //         "thresholding white",
-            //                 //         "combination",
-            //                 //         "tracking image",
-            //                 //         "final"                
-            //                 //     ]
-
-            //                 //     currentIndex: 13
-
-            //                 //     onCurrentIndexChanged: signalHandeler.dropDown(currentIndex)
-            //                 // } 
-                            
-            //                 // RowLayout {
-            //                 //     Text {
-            //                 //         Layout.alignment: Qt.AlignVCenter
-                                    
-            //                 //         font.pointSize: 12
-            //                 //         text: 'Use Mask: '
-            //                 //         color: '#FFFFFF'
-            //                 //     }
-
-            //                 //     Switch {
-            //                 //         Layout.alignment: Qt.AlignHCenter
-            //                 //         Layout.fillWidth: true
-
-            //                 //         position: 1
-
-            //                 //         onCheckedChanged: signalHandeler.buttonMaskSelection(position)
-            //                 //     }
-            //                 // }
-                            
-            //                 // RowLayout {
-            //                 //     SpinBox {
-            //                 //         id: erosionSpinBox
-                                    
-            //                 //         width: 40
-                                    
-            //                 //         Layout.fillWidth: true
-            //                 //         value: 4
-
-            //                 //         onValueChanged: signalHandeler.erosionSelection(value)
-
-            //                 //         ToolTip {
-            //                 //             visible: erosionSpinBox.hovered
-            //                 //             text: 'Erosion Steps'
-            //                 //         }
-            //                 //     }
-            //                 // }
-            //             }
-
-            //             Column {
-            //                 width: 200
-            //                 // height: parent.height / 2
-            //                 spacing: 10
-
-            //                 Rectangle {
-            //                     anchors.fill: parent
-            //                     color: "#ffffff"
-            //                 }
-            //             }
-            //         }
-            //     }
-            // }
-
             RowLayout {
                 spacing: 40
                 width: parent.width
@@ -658,7 +550,7 @@ ApplicationWindow {
 
                             Switch {
                                 Layout.alignment: Qt.AlignRight
-                                position: 1
+                                position: 0
 
                                 onCheckedChanged: signalHandeler.buttonMaskSelection(position)
                             }
@@ -716,13 +608,13 @@ ApplicationWindow {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.preferredWidth: parent.width * 0.6
 
-                            from: 1
+                            from: 0
                             to: 15
 
                             value: 1
 
                             onValueChanged: {
-                                frequencySpinBox.setFrequency(value)
+                                signalHandeler.setFrequency(value)
                             }
 
                             ToolTip {
@@ -855,6 +747,73 @@ ApplicationWindow {
 
                     ColumnLayout {
                         anchors.fill: parent
+
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+                            
+                            Text {
+                                Layout.alignment: Qt.AlignLeft
+
+                                font.pointSize: 12
+                                text: 'Components: '
+                                color: '#FFFFFF'
+                            }
+
+                            Text {
+                                id: textAmountComponents
+                                objectName: "textAmountComponents"
+                                Layout.alignment: Qt.AlignRight
+
+                                font.pointSize: 12
+                                text: 'xxx'
+                                color: '#FFFFFF'
+                            }
+                        }
+
+                        SpinBox {
+                            id: frequencyBufferSpinBox
+
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+
+                            from: 0
+                            to: 6
+
+                            value: 0
+
+                            onValueChanged: {
+                                signalHandeler.setFrequencyBuffer(value)
+                            }
+
+                            ToolTip {
+                                visible: frequencyBufferSpinBox.hovered
+                                text: 'Frequency Buffer'
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+                            
+                            Text {
+                                Layout.alignment: Qt.AlignLeft
+
+                                font.pointSize: 12
+                                text: 'Frequency: '
+                                color: '#FFFFFF'
+                            }
+
+                            Text {
+                                id: frequencyComponents
+                                objectName: "frequencyComponents"
+                                Layout.alignment: Qt.AlignRight
+
+                                font.pointSize: 12
+                                text: 'xxx'
+                                color: '#FFFFFF'
+                            }
+                        }
                     }
                 }
             }

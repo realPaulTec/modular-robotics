@@ -158,7 +158,7 @@ class LiDAR:
 
             # Printing Δt in seconds.
             secondaryTime = time.time()
-            print('Delta Time: %ss' %(format((secondaryTime - primaryTime), '.2f')))
+            print('Δt: %ss' %(format((secondaryTime - primaryTime), '.2f')))
 
     def get_scan_matrix(self, matrix, scan):
         # Getting hit coordinates relative to LiDAR position in meters!
