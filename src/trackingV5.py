@@ -305,9 +305,8 @@ class systemTrack:
                 median = np.median(history)
                 mean = np.mean(history)
 
-
-                print(f"History: {history}\nMedian: {median}\nMean: {mean}")
-                # print(f"Mean: {mean}")
+                # print(f"History: {history}\nMedian: {median}\nMean: {mean}")
+                print(f"Frequency: {round(1 / median, 2)} Hz")
 
                 component.history = []
 

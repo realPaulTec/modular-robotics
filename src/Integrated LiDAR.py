@@ -47,15 +47,15 @@ class LiDAR:
 
         # How similar do two matrices have to be to be considered one?
         # NOTE: Implement WEIGHT!
-        self.MAX_MATRIX_DIFFERENCE = 6
+        self.MAX_MATRIX_DIFFERENCE = 20
 
         self.MAX_LIFETIME_SECONDS = 1.0
         self.ACCEPTED_TIME = 0.2
         
         # Weight
-        self.wCoordinates = 1
-        self.wBounds = 0.4
-        self.wArea = 0.2
+        self.wCoordinates = 1.0
+        self.wBounds = 0.3
+        self.wArea = 0.4
 
 
         # ===== UI constants ======================================
@@ -227,29 +227,20 @@ class LiDAR:
         for i, component in enumerate(filteredComponents):
             print(f"COMPONENT {component.ID}: \n x: {component.x} | y: {component.y} | width: {component.width} | height: {component.height}")
 
+            # Get the component geometry which acts as a "Paintbrush"
             brush = component.geometry
-
             brush[brush > 0] = component.ID % self.MAX_VISUALIZATION
 
+            # Draw the component
             canvasMatrix += brush
 
         # Synchronizing with main thread and graphing the matrix in matplotlib. 
         with self.matrix_lock:
-            self.graphingMatrix = canvasMatrix # connectedLiDAR[1]
+            self.graphingMatrix = canvasMatrix
 
     def filter(self, newComponents):
         newComponents = np.array(newComponents)
 
-        # Unify similar components from the current cycle
-        for component in newComponents:
-            # Get index and difference from the closest component to the current one
-            index, difference = component.check_similarity_array(newComponents, self.wCoordinates, self.wArea, self.wBounds)
-
-            # Check for (and delete) duplicate component
-            if index != None and difference != None and difference <= self.MAX_MATRIX_DIFFERENCE:
-                np.delete(newComponents, int(index), 0)
-        
-    
         for component in self.LiDARcomponents:
             index, difference = component.check_similarity_array(newComponents, self.wCoordinates, self.wArea, self.wBounds)
 
@@ -258,9 +249,6 @@ class LiDAR:
 
             elif time.time() - component.lastUpdate < self.MAX_LIFETIME_SECONDS:
                 newComponents = np.append(newComponents, component)
-
-            else:
-                pass # print(f"DROPPED CMP: {component.ID} for DFF: {difference}")
 
         # Generate IDs for all new components
         for component in newComponents:
