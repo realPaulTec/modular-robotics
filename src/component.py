@@ -22,34 +22,38 @@ class Component:
         self.matrix = self.generate_matrix(1 , 1, 1)
 
         self.ID = None
+        self.color = (0, 0, 0)
         self.similarity = 0
 
         self.history = []
 
+        self.frequency = 0
+
     def generate_matrix(self, wCoordinates, wBounds, wArea):
+        # Generating a 2D matrix of core coordinates, bounds and area.
         matrix = np.array([
             self.x * wCoordinates,
             self.y * wCoordinates,
             self.width * wBounds,
             self.height * wBounds,
-            self.area * wArea
+            (self.area / 100) * wArea
         ])
-        
-        # FIXME: self.area dropped due to filter issues! Implement weight to fix! 
 
         return matrix
 
-    def update_component(self, ID, similarity):
+    def update_component(self, ID, similarity, history=[]):
         self.lastUpdate = time.time()
         self.similarity = similarity
+
         self.ID = ID
+        self.history = history
 
     def check_similarity_single(self, input_class, wCoordinates, wBounds, wArea) -> int:
         self.matrix = self.generate_matrix(wCoordinates, wBounds, wArea)
         inputMatrix = input_class.generate_matrix(wCoordinates, wBounds, wArea)
         
         bufferArray = np.abs(inputMatrix - self.matrix)
-        mean = np.fix(np.mean(bufferArray)) 
+        mean = np.fix(np.mean(bufferArray))
 
         return mean
 
@@ -66,7 +70,7 @@ class Component:
 
         try:
             similarityArray = similarityArray[np.argsort(similarityArray[:, 1])]
-        except IndexError:  # NOTE: There might still be an dimension error . indexerror with less than 2 components ¯\(o_o)/¯ 
+        except IndexError:
             pass   
 
         if len(similarityArray) > 0:
@@ -75,5 +79,6 @@ class Component:
             return None, None
 
     def generate_id(self):
+        # Generate a unique identity
         self.ID = Component.ID
         Component.ID += 1

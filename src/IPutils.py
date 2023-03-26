@@ -2,6 +2,8 @@
 
 import numpy as np
 import cv2
+import hashlib
+import random
 
 def adjustSaturation(frameIn, saturation):
     # Converting the color to HSV and avoiding unit8 overflow error with float values
@@ -57,3 +59,14 @@ def rectangular_masking(frame, canvasFrame, coordinates, extents, buffer):
     cv2.rectangle(canvasFrame, (int(coordinates[0] - buffer), int(coordinates[1] - buffer)), (int(coordinates[0] + extents[0] + buffer), int(coordinates[1] + extents[1] + buffer)), 255, 2)
 
     return maskedImage, canvasFrame
+
+def get_color_from_id(ID):
+    # Use hashlib to generate a unique hash for the given ID
+    random.seed(ID)
+    
+    # Add some randomness to the color
+    r = (255 / 40) * random.randint(0, 35)
+    g = (255 / 40) * random.randint(0, 35)
+    b = (255 / 40) * random.randint(0, 35)
+    
+    return (r, g, b)

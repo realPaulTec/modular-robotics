@@ -100,6 +100,8 @@ class Backend:
             tracker.wCoordinates = self.signalHandeler.wCoordinates
             tracker.wBounds = self.signalHandeler.wBounds
             tracker.wArea = self.signalHandeler.wArea
+
+            tracker.frequency = self.signalHandeler.frequency
             
             # Killing the cycle on the first round
             if kill == True:
@@ -161,13 +163,15 @@ class SignalHandeler(QObject):
 
         self.maskSelection = True
         self.erosionSteps = 4
-        self.lifetime = 0.1
+        self.lifetime = 1.0
 
-        self.maxDifference = 20
+        self.maxDifference = 1
 
-        self.wCoordinates = 1
-        self.wBounds = 1
-        self.wArea = 1
+        self.wCoordinates = 0.6
+        self.wBounds = 1.0
+        self.wArea = 0.8
+
+        self.frequency = 0
 
     @Slot(str)
     def radioSignal(self, incoming):
@@ -239,7 +243,7 @@ class SignalHandeler(QObject):
 
     @Slot(str)
     def setLifetime(self, incoming):
-        self.lifetime = int(incoming) / 10
+        self.lifetime = int(incoming) / 100
 
     @Slot(str)
     def setWeightCoordinates(self, incoming):
@@ -252,6 +256,10 @@ class SignalHandeler(QObject):
     @Slot(str)
     def setWeightArea(self, incoming):
         self.wArea = float(incoming)
+
+    @Slot(str)
+    def setFrequency(self, incoming):
+        self.frequency = int(round(incoming))
 
 
 class ImageProvider(QQuickImageProvider):

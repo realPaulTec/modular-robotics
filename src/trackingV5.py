@@ -6,6 +6,12 @@ import time
 import cv2
 import IPutils
 
+# TODO:
+# Add Delta Time
+# Append the last update to component history if the object has been found, AND that after twice the delta time
+# Check if the mean of the history after a specific sample size is within the buffer of the frequency
+# Render said component(s) separately. 
+
 class systemTrack:
     def __init__(self, vcd, targetChannel=0, aqqExtents=(100, 100), saturationAdjustment=1.2, contrastAdjustment=1.02, brightnessAdjustment=0) -> None:
         # Setting up video capture device (camera)
@@ -46,12 +52,19 @@ class systemTrack:
 
         self.trackComponents = []
 
-        self.MAX_MATRIX_DIFFERENCE = 20
+        self.MAX_MATRIX_DIFFERENCE = 0
         self.MAX_LIFETIME_SECONDS = 4
 
         self.wCoordinates = 1
         self.wBounds = 1
         self.wArea = 1
+
+        self.frequency = 10
+        self.frequencyBuffer = 2
+        self.FREQUENCY_SAMPLES = 4
+        self.ΔTimeFactorHistory = 1.5
+
+        self.ΔTime = 0
 
         self.frameHistory = {
             "camera feed" : None,
@@ -71,7 +84,8 @@ class systemTrack:
         }
 
     def mainCycle(self):
-        # print('=== NEW =========================== NEW ===')
+        # Δt No.1
+        time_1 = time.time()
 
         # ===== Reading Camera ====================================
 
@@ -140,6 +154,8 @@ class systemTrack:
         # Setting the final result to the frame history!
         self.frameHistory["final"] = np.array(canvasFrame)
 
+        # Δt No.2
+        self.ΔTime = time.time() - time_1
 
         return frame, self.refinedComponents, self.frameHistory
 
@@ -213,8 +229,8 @@ class systemTrack:
         # using cv2 morphology to remove noise and small light sources (e.g. reflections)
         thresholdClean = cv2.morphologyEx(threshold, cv2.MORPH_OPEN, None, iterations=self.erosionSteps)
 
-        # re-thresholding the processed image to purify the white output and avoid possible dark connecting islands
-        thresholdClean = cv2.threshold(thresholdClean, 200, 255, cv2.THRESH_BINARY)[1]
+        # re-thresholding the processed image to purify the white output and avoid possible dark connecting islands |  cv2.threshold(thresholdClean, 200, 255, cv2.THRESH_BINARY)[1]
+        thresholdClean[thresholdClean > 0] = 1
 
         # Showing the results of this step in the frame history.
         self.frameHistory["thresholding blue"] = np.array(thresholds[0])
@@ -233,7 +249,7 @@ class systemTrack:
         components = componentsTRK[2]
         totalComponents = componentsTRK[0]
 
-        # Making a dictionary of the components. TODO: Change to np.array for performance reasons.
+        # Making a dictionary of the components.
         for i in range(totalComponents - 1):
             component = Component(
                 components[i + 1, cv2.CC_STAT_LEFT],                        # x coordinate
@@ -249,6 +265,7 @@ class systemTrack:
         return newComponents
     
     def filter_components(self, newComponents):
+        # Convert new components to numpy array for calculations
         newComponents = np.array(newComponents)
 
         # Unify similar components from the current cycle
@@ -259,31 +276,54 @@ class systemTrack:
             # Check for (and delete) duplicate component
             if index != None and difference != None and difference <= self.MAX_MATRIX_DIFFERENCE:
                 np.delete(newComponents, int(index), 0)
-        
-    
+
+
+        # Trying to match old components to a new child.
         for component in self.trackComponents:
             index, difference = component.check_similarity_array(newComponents, self.wCoordinates, self.wArea, self.wBounds)
 
+            # Update the component if a new child is found withing the MAX_MATRIX_DIFFERENCE!
             if index != None and difference != None and difference <= self.MAX_MATRIX_DIFFERENCE:
-                newComponents[int(index)].update_component(component.ID, difference)
+                # Append the last update before the component was reacquired  
+                if (time.time() - component.lastUpdate) > (self.ΔTimeFactorHistory * self.ΔTime):
+                    component.history.append(time.time() - component.lastUpdate)
 
+                newComponents[int(index)].update_component(component.ID, difference, history = component.history)
+            
+            # Keep the component as long as its extended lifetime permits.
             elif time.time() - component.lastUpdate < self.MAX_LIFETIME_SECONDS:
                 newComponents = np.append(newComponents, component)
 
-            else:
-                pass
+        for component in newComponents:
+            # Generate IDs for new components which did not find a parent.
+            if component.ID == None:
+                component.generate_id()
 
-                # print(f"DROPPED CMP: {component.ID} for DFF: {difference}")
+            # Calculate the frequency of the component
+            if len(component.history) >= self.FREQUENCY_SAMPLES:
+                history = np.array(component.history)
+                median = np.median(history)
+                mean = np.mean(history)
 
+
+                print(f"History: {history}\nMedian: {median}\nMean: {mean}")
+                # print(f"Mean: {mean}")
+
+                component.history = []
+
+
+        # Processed new components are now the historical ones for the next generation!
         self.trackComponents = np.array(newComponents)
-
-        print(f"There are {len(self.trackComponents)} component(s)!")
+        # print(f"There are {len(self.trackComponents)} component(s)!")
 
         return self.trackComponents
 
     def render_components(self, components, canvasFrame):
+        # Render all components rectangles with a unique color based on their ID. TODO: Render components with the correct frequency separately!
         for component in components:
-            cv2.rectangle(canvasFrame, (component.x, component.y), (component.x + component.width, component.y + component.height), (0, 255, 0), 3)
+            component.color = IPutils.get_color_from_id(component.ID)
+
+            cv2.rectangle(canvasFrame, (component.x, component.y), (component.x + component.width, component.y + component.height), component.color, 3)
 
         return canvasFrame
 

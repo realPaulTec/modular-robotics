@@ -697,10 +697,10 @@ ApplicationWindow {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.preferredWidth: parent.width * 0.6
 
-                            from: 1
-                            to: 2000
-
-                            value: 20
+                            from: 0
+                            to: 500
+                            value: 60
+                            stepSize: 10
 
                             onValueChanged: signalHandeler.setMaxDifference(value)
 
@@ -709,22 +709,62 @@ ApplicationWindow {
                                 text: 'Max Difference'
                             }
                         }
+
+                        SpinBox {
+                            id: frequencySpinBox
+
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+
+                            from: 1
+                            to: 15
+
+                            value: 1
+
+                            onValueChanged: {
+                                frequencySpinBox.setFrequency(value)
+                            }
+
+                            ToolTip {
+                                visible: frequencySpinBox.hovered
+                                text: 'Frequency (Hz)'
+                            }
+                        }
+
                         SpinBox {
                             id: lifetimeSpinBox
 
                             Layout.alignment: Qt.AlignHCenter
                             Layout.preferredWidth: parent.width * 0.6
-
-                            stepSize: 1
-                            value: 1
+                            
+                            from: 0
+                            to: 100 * 100
+                            value: 100
+                            stepSize: 5
+                            
+                            property int decimals: 2
+                            property real realValue: value / 100
 
                             onValueChanged: {
                                 signalHandeler.setLifetime(value)
                             }
 
+                            validator: DoubleValidator {
+                                bottom: Math.min(lifetimeSpinBox.from, lifetimeSpinBox.to)
+                                top:  Math.max(lifetimeSpinBox.from, lifetimeSpinBox.to)
+                            }
+
+                            textFromValue: function(value, locale) {
+                                return Number(value / 100).toLocaleString(locale, 'f', lifetimeSpinBox.decimals)
+                            }
+
+                            valueFromText: function(text, locale) {
+                                return Number.fromLocaleString(locale, text) * 100
+                            }
+
                             ToolTip {
                                 visible: lifetimeSpinBox.hovered
-                                text: 'Component Lifetime 0.1 s'
+                                text: 'Component Lifetime (s)'
                             }
                         }
                     }
@@ -746,7 +786,9 @@ ApplicationWindow {
                             Layout.preferredWidth: parent.width * 0.6
 
                             from: 0
-                            to: 100     
+                            to: 1
+
+                            value: 0.6 
 
                             onValueChanged: {
                                 signalHandeler.setWeightCoordinates(value)
@@ -755,7 +797,7 @@ ApplicationWindow {
                             ToolTip {
                                 parent: weightCoordinatesSlider.handle
                                 visible: weightCoordinatesSlider.pressed
-                                text: "Weight Coordinates: " + weightCoordinatesSlider.value.toFixed(0)
+                                text: "Weight Coordinates: " + weightCoordinatesSlider.value.toFixed(2)
                             }                      
                         }
 
@@ -766,7 +808,9 @@ ApplicationWindow {
                             Layout.preferredWidth: parent.width * 0.6
 
                             from: 0
-                            to: 100     
+                            to: 1
+
+                            value: 1.0 
 
                             onValueChanged: {
                                 signalHandeler.setWeightBounds(value)
@@ -775,7 +819,7 @@ ApplicationWindow {
                             ToolTip {
                                 parent: weightBoundsSlider.handle
                                 visible: weightBoundsSlider.pressed
-                                text: "Weight Bounds: " + weightBoundsSlider.value.toFixed(0)
+                                text: "Weight Bounds: " + weightBoundsSlider.value.toFixed(2)
                             }                      
                         }
 
@@ -786,7 +830,9 @@ ApplicationWindow {
                             Layout.preferredWidth: parent.width * 0.6
 
                             from: 0
-                            to: 100     
+                            to: 1   
+
+                            value: 0.8  
 
                             onValueChanged: {
                                 signalHandeler.setWeightArea(value)
@@ -795,9 +841,20 @@ ApplicationWindow {
                             ToolTip {
                                 parent: weightAreaSlider.handle
                                 visible: weightAreaSlider.pressed
-                                text: "Weight Area: " + weightAreaSlider.value.toFixed(0)
+                                text: "Weight Area: " + weightAreaSlider.value.toFixed(2)
                             }                      
                         }
+                    }
+                }
+
+                Rectangle {
+                    Layout.fillHeight: true
+                    Layout.fillWidth: true
+                    color: "#1c1c1c"
+                    radius: 10
+
+                    ColumnLayout {
+                        anchors.fill: parent
                     }
                 }
             }
