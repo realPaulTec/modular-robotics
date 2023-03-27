@@ -7,10 +7,7 @@ import cv2
 import IPutils
 
 # TODO:
-# Add Delta Time
-# Append the last update to component history if the object has been found, AND that after twice the delta time
-# Check if the mean of the history after a specific sample size is within the buffer of the frequency
-# Render said component(s) separately. 
+# Render modulating component(s) separately. 
 
 class systemTrack:
     def __init__(self, vcd, targetChannel=0, aqqExtents=(100, 100), saturationAdjustment=1.2, contrastAdjustment=1.02, brightnessAdjustment=0) -> None:

@@ -678,7 +678,7 @@ ApplicationWindow {
                             Layout.preferredWidth: parent.width * 0.6
 
                             from: 0
-                            to: 1
+                            to: 2
 
                             value: 0.6 
 
@@ -700,7 +700,7 @@ ApplicationWindow {
                             Layout.preferredWidth: parent.width * 0.6
 
                             from: 0
-                            to: 1
+                            to: 2
 
                             value: 1.0 
 
@@ -722,7 +722,7 @@ ApplicationWindow {
                             Layout.preferredWidth: parent.width * 0.6
 
                             from: 0
-                            to: 1   
+                            to: 2
 
                             value: 0.8  
 
