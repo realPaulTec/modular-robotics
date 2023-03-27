@@ -27,8 +27,6 @@ ApplicationWindow {
             anchors.fill: parent
 
             RowLayout {
-                // anchors.top: parent.top
-
                 Image {
                     id: trackingImage
                     fillMode: Image.PreserveAspectFit
