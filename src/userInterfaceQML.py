@@ -8,11 +8,11 @@ from PySide6.QtQml import *
 from PySide6.QtQuick import *
 
 import trackingV5 as tv5
-import threading
 import subprocess
 import sys
 import cv2
 
+# sudo apt-get install v4l-utils
 
 try:
     # Get system cameras and show them to the user.
@@ -125,20 +125,6 @@ class Backend:
 
 
 class SignalHandeler(QObject):
-    # radioButtonSignal = Signal(int)
-
-    # redSliderMaxSignal = Signal(int)
-    # redSliderMinSignal = Signal(int)
-
-    # greenSliderMaxSignal = Signal(int)
-    # greenSliderMinSignal = Signal(int)
-
-    # blueSliderMaxSignal = Signal(int)
-    # blueSliderMinSignal = Signal(int)
-
-    # brightSliderMaxSignal = Signal(int)
-    # brightSliderMinSignal = Signal(int)
-
     def __init__(self):
         super().__init__()
         self.targetChannel = 0
@@ -182,14 +168,14 @@ class SignalHandeler(QObject):
         self.erosionSteps = 4
         self.lifetime = 1.0
 
-        self.maxDifference = 1
+        self.maxDifference = 140
 
         self.wCoordinates = 0.6
         self.wBounds = 1.0
         self.wArea = 0.8
 
-        self.frequency = 0
-        self.frequencyBuffer = 0
+        self.frequency = 3
+        self.frequencyBuffer = 2
 
     @Slot(str)
     def radioSignal(self, incoming):

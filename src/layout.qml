@@ -591,7 +591,7 @@ ApplicationWindow {
 
                             from: 0
                             to: 500
-                            value: 60
+                            value: 140
                             stepSize: 10
 
                             onValueChanged: signalHandeler.setMaxDifference(value)
@@ -611,7 +611,7 @@ ApplicationWindow {
                             from: 0
                             to: 15
 
-                            value: 1
+                            value: 3
 
                             onValueChanged: {
                                 signalHandeler.setFrequency(value)
@@ -780,7 +780,7 @@ ApplicationWindow {
                             from: 0
                             to: 6
 
-                            value: 0
+                            value: 2
 
                             onValueChanged: {
                                 signalHandeler.setFrequencyBuffer(value)

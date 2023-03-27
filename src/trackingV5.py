@@ -62,7 +62,8 @@ class systemTrack:
         self.frequency = 10
         self.frequencyBuffer = 2
         self.FREQUENCY_SAMPLES = 4
-        self.ΔTimeFactorHistory = 1.5
+        self.ΔTimeFactorHistory = 2.5
+        self.lastFrequencyUpdate = time.time()
 
         self.ΔTime = 0
 
@@ -132,10 +133,10 @@ class systemTrack:
         # ===== Component Tracking ================================
 
         # Tracking the individual components in an array
-        threshold = self.processing_thresholds(thresholds, frame)
+        finalThreshold = self.processing_thresholds(thresholds, frame)
 
         # Letting OpenCV recognize the white islands left by previous operations
-        connectedComponentsStats = cv2.connectedComponentsWithStats(threshold, 1, cv2.CV_32S)
+        connectedComponentsStats = cv2.connectedComponentsWithStats(finalThreshold, 1, cv2.CV_32S)
 
         # Refining the components into component classes 
         newComponents = self.refine_components(connectedComponentsStats)
@@ -158,6 +159,7 @@ class systemTrack:
 
         # Δt No.2
         self.ΔTime = time.time() - time_1
+        # print(self.ΔTime)
 
         return frame, self.refinedComponents, self.frameHistory
 
@@ -229,10 +231,11 @@ class systemTrack:
                     threshold -= (currentThreshold)
 
         # using cv2 morphology to remove noise and small light sources (e.g. reflections)
-        thresholdClean = cv2.morphologyEx(threshold, cv2.MORPH_OPEN, None, iterations=self.erosionSteps)
+        thresholdClean = np.array(cv2.morphologyEx(np.array(threshold), cv2.MORPH_OPEN, None, iterations=self.erosionSteps))
 
-        # re-thresholding the processed image to purify the white output and avoid possible dark connecting islands |  cv2.threshold(thresholdClean, 200, 255, cv2.THRESH_BINARY)[1]
-        thresholdClean[thresholdClean > 0] = 1
+        # re-thresholding the processed image to purify the white output and avoid possible dark connecting islands | 
+        thresholdClean = cv2.threshold(thresholdClean, 200, 255, cv2.THRESH_BINARY)[1]
+        # thresholdClean[thresholdClean > 0] = 1
 
         # Showing the results of this step in the frame history.
         self.frameHistory["thresholding blue"] = np.array(thresholds[0])
@@ -242,7 +245,7 @@ class systemTrack:
         self.frameHistory["combination"] = np.array(threshold)
         self.frameHistory["tracking image"] = np.array(thresholdClean)
 
-        return thresholdClean
+        return np.array(thresholdClean)
     
     def refine_components(self, componentsTRK):
         newComponents = []
@@ -308,7 +311,7 @@ class systemTrack:
                 history = np.array(component.history)
                 median = np.median(history)
 
-                frequencies.append(round(1 / median, 2))
+                frequencies.append(round(1 / (median * 2), 2))
                 component.history = []
 
         # Get the frequency which is the closest match to the desired one.
@@ -316,10 +319,14 @@ class systemTrack:
             frequencies = np.array(frequencies)
             index = (np.abs(frequencies - self.frequency)).argmin()
 
+            # Check if the acquired frequency is within the buffer zone!
             if abs(frequencies[index] - self.frequency) <= self.frequencyBuffer:
                 self.closestFrequency = frequencies[index]
-            else:
-                self.closestFrequency = 0.00
+                self.lastFrequencyUpdate = time.time()
+
+        # Set it to zero if the frequency was lost!
+        elif self.closestFrequency > 0 and (time.time() - self.lastFrequencyUpdate) > (2 * self.FREQUENCY_SAMPLES / self.closestFrequency):
+            self.closestFrequency = 0.00
 
         # Processed new components are now the historical ones for the next generation!
         self.trackComponents = np.array(newComponents)
