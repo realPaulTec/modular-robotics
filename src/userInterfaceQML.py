@@ -4,15 +4,21 @@ from PySide6.QtWidgets import *
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtQml import *
-
 from PySide6.QtQuick import *
-
 import trackingV5 as tv5
+import advancedLiDAR as avL
+import numpy as np
+import threading
 import subprocess
+import time
 import sys
 import cv2
 
 # sudo apt-get install v4l-utils
+
+np.set_printoptions(threshold=sys.maxsize)
+
+RECONNECTS = 2
 
 try:
     # Get system cameras and show them to the user.
@@ -33,6 +39,17 @@ try:
         print(f"ERROR: Cannot open Video Device at: {cameraIndex}")
 
         sys.exit()
+
+    for i in range(RECONNECTS):
+        try:
+            currentLiDAR = avL.LiDAR()
+
+        except Exception:
+            print(f'ERROR: attempting to reconnect | {i} / {RECONNECTS}')
+            time.sleep(2)
+
+            if i == 2:  sys.exit()
+            else: continue
 
 except KeyboardInterrupt:
     print('\n\nExiting on KeyboardInterrupt!')
@@ -70,15 +87,47 @@ class Backend:
     def interfaceCycle(self, kill = False):
         tracker.mainCycle()
 
-        currentFrame = tracker.frameHistory[self.signalHandeler.dropdownSelection]
+        if self.signalHandeler.dropdownSelection == "LiDAR":
+            # Getting LiDAR image!
+            lidarData = currentLiDAR.graphingMatrix
+            
+            # Fixing the image for QML integration
+            lidarData = np.array(lidarData, dtype=np.float32)
+            lidarData = np.interp(lidarData, (0, 8), (0, 255)).astype(np.float32)
+            lidarData = np.rint(lidarData).astype(np.uint8)
 
-        # Fixing the image for QML integration
-        interfaceFrame = cv2.cvtColor(currentFrame, cv2.COLOR_BGR2RGB)
-        interfaceFrame = cv2.flip(interfaceFrame, 1)
+            lidarData = cv2.resize(lidarData, (720, 720), interpolation=cv2.INTER_LINEAR)
+            lidarData = cv2.merge([lidarData, lidarData, lidarData])
+
+            interfaceFrame = lidarData
+
+        else:
+            currentFrame = tracker.frameHistory[self.signalHandeler.dropdownSelection]
+
+            # Fixing the image for QML integration
+            interfaceFrame = cv2.cvtColor(currentFrame, cv2.COLOR_BGR2RGB)
+            interfaceFrame = cv2.flip(interfaceFrame, 1)
+
 
         trackingImage = QImage(interfaceFrame, interfaceFrame.shape[1], interfaceFrame.shape[0], interfaceFrame.strides[0], QImage.Format_RGB888)
         self.imageProvider.updateImage(trackingImage, 'trackingImage')
 
+        self.set_tracker_values()
+        
+        # Killing the cycle on the first round
+        if kill != True:
+            textAmountComponents = self.windowContext.findChild(QObject, "textAmountComponents")
+            
+            if textAmountComponents is not None:
+                textAmountComponents.setProperty("text", str(len(tracker.trackComponents)))
+            
+            frequencyComponents = self.windowContext.findChild(QObject, "frequencyComponents")
+            
+            if frequencyComponents is not None:
+                frequencyComponents.setProperty("text", f"{tracker.closestFrequency}Hz")
+
+    def set_tracker_values(self):
+        # Set all tracking system values to the ones from the Signal handler
         tracker.useMask = self.signalHandeler.maskSelection
         tracker.erosionSteps = self.signalHandeler.erosionSteps
         tracker.targetChannel = int(self.signalHandeler.targetChannel)
@@ -109,19 +158,7 @@ class Backend:
         tracker.wArea = self.signalHandeler.wArea
 
         tracker.frequency = self.signalHandeler.frequency
-        tracker.frequencyBuffer = self.signalHandeler.frequencyBuffer
-        
-        # Killing the cycle on the first round
-        if kill != True:
-            textAmountComponents = self.windowContext.findChild(QObject, "textAmountComponents")
-            
-            if textAmountComponents is not None:
-                textAmountComponents.setProperty("text", str(len(tracker.trackComponents)))
-            
-            frequencyComponents = self.windowContext.findChild(QObject, "frequencyComponents")
-            
-            if frequencyComponents is not None:
-                frequencyComponents.setProperty("text", f"{tracker.closestFrequency}Hz")
+        tracker.frequencyBuffer = self.signalHandeler.frequencyBuffer        
 
 
 class SignalHandeler(QObject):
@@ -147,7 +184,10 @@ class SignalHandeler(QObject):
 
         self.dropdownSelection = "final"
 
+        self.LiDARselection = False
+
         self.frameHistory = [
+            "LiDAR",
             "camera feed",
             "color corrected",
             "masked frame",
@@ -188,6 +228,12 @@ class SignalHandeler(QObject):
     @Slot(str)
     def buttonMaskSelection(self, incoming):
         self.maskSelection = (int(incoming) == 1)
+
+    @Slot(str)
+    def selectLiDAR(self, incoming):
+        self.LiDARselection = (int(incoming) == 1)
+
+        print(self.LiDARselection)
 
     @Slot(str)
     def erosionSelection(self, incoming):
@@ -284,13 +330,15 @@ class ImageProvider(QQuickImageProvider):
             return self.trackingImage
 
 
-if __name__ == "__main__":
-    # Disable stupid warnings
-    QCoreApplication.setAttribute(Qt.AA_DisableHighDpiScaling, True)
-    
+if __name__ == "__main__":    
     # Application setup
     application = QApplication([])
     applicationBackend = Backend('src/layout.qml', ImageProvider(QQmlImageProviderBase.ImageType.Image))
+
+    # Setting up and starting the scan thread for the LiDAR
+    scanThread = threading.Thread(target = currentLiDAR.scan_thread)
+    scanThread.daemon = True
+    scanThread.start()
 
     # Exiting on window close
     sys.exit(application.exec())

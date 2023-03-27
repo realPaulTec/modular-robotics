@@ -9,11 +9,6 @@ import atexit
 import threading
 import cv2
 
-font = {'family' : 'URW Gothic',
-        'weight' : 'bold',
-        'size'   : 14}
-
-plt.rc('font', **font)
 
 class LiDAR:
     def __init__(self) -> None:
@@ -68,7 +63,6 @@ class LiDAR:
 
         # ID color range
         self.MAX_VISUALIZATION = 8
-
         
         # ===== LiDAR setup =======================================
         
@@ -88,10 +82,8 @@ class LiDAR:
         # Setting up thread locks for thread synchronization
         self.matrix_lock = threading.Lock()
 
-        # Setting up and starting the scan thread
-        scanThread = threading.Thread(target = self.scan)
-        scanThread.daemon = True
-        scanThread.start()
+        # Starting the LiDAR data handler.
+        self.handler = self.lidar.start_scan_express(2)
 
 
         # ===== Graphing setup ====================================
@@ -99,10 +91,11 @@ class LiDAR:
         # Setting up the graphing matrix
         self.graphingMatrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X))
 
-        # Setting up the plot for the LiDAR visualization
-        self.fig = plt.figure(facecolor='black')
-        self.matrixVisualization = self.fig.add_subplot()
-        self.matrixVisualization.tick_params(which='both', colors='#55ddffff')
+        if __name__ == "__main__":
+            # Setting up the plot for the LiDAR visualization
+            self.fig = plt.figure(facecolor='black')
+            self.matrixVisualization = self.fig.add_subplot()
+            self.matrixVisualization.tick_params(which='both', colors='#55ddffff')
 
 
         # ===== General setup =====================================
@@ -112,6 +105,8 @@ class LiDAR:
         max_x = self.MAX_DISTANCE_METERS / np.cos(np.pi / 4)
         max_y = self.MAX_DISTANCE_METERS / np.sin(np.pi / 4)
         self.max_x_y = max(max_x, max_y) * 1000
+
+        self.ΔTime = 0
 
     def update(self):
         self.graphing()
@@ -128,37 +123,62 @@ class LiDAR:
 
         plt.pause(0.01)
 
-    def scan(self):
+    def get_scan(self, handler):
+        # Resetting matrix for new scan.
+        matrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X)).astype(np.int16)
+        
+        # Processing the data from the LiDAR in a handler from the PyRPlidar library!
+        for count, scan in enumerate(handler()):
+
+            # Quick distance approximation for performance reasons. || Don't want to run trigonometric functions if they aren't necessary!
+            if scan.distance != 0 and scan.distance < self.max_x_y:
+                matrix = self.get_scan_matrix(matrix, scan)
+            
+            # Breaking for loop after surpassing set sample rate.
+            if count == self.SAMPLE_RATE: break
+
+        return matrix
+
+    def scan_thread(self, render=False):
         global graphingMatrix
 
-        # Starting the LiDAR data handler.
-        handler = self.lidar.start_scan_express(2)
+        while True:
+            try:
+                self.scan()
+                LiDARimage = self.render_scan(self.LiDARcomponents)
 
-        while True: 
-            # Getting first time for Δt in seconds.
-            primaryTime = time.time()
+                if render == True:
+                    # Synchronizing with main thread and graphing the matrix in matplotlib. 
+                    with self.matrix_lock:
+                        self.graphingMatrix = LiDARimage
+                else:
+                    self.graphingMatrix = LiDARimage
+            except TypeError:
+                break
 
-            # Resetting matrix for new scan.
-            matrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X)).astype(np.int16)
-            
-            # Processing the data from the LiDAR in a handler from the PyRPlidar library!
-            for count, scan in enumerate(handler()):
+    def scan(self): 
+        # Getting first time for Δt in seconds.
+        primaryTime = time.time()
 
-                # Quick distance approximation for performance reasons. || Don't want to run trigonometric functions if they aren't necessary!
-                if scan.distance != 0 and scan.distance < self.max_x_y:
-                    matrix = self.get_scan_matrix(matrix, scan)
-                
-                # Breaking for loop after surpassing set sample rate.
-                if count == self.SAMPLE_RATE: break
+        matrix = self.get_scan(self.handler)
 
-            print('==NEXT======================================NEXT==')
+        # Processing the scan & getting the processed matrix. 
+        newComponents = self.process_scan(matrix)
 
-            # Processing the scan & getting the processed matrix. 
-            matrix = self.process_scan(matrix)
+        # Filtering the LiDAR components, compared to their historical counterparts. 
+        if len(self.LiDARcomponents) > 0:
+            self.LiDARcomponents = self.filter_components(newComponents)
+        else:
+            for component in newComponents:
+                component.generate_id()
 
-            # Printing Δt in seconds.
-            secondaryTime = time.time()
-            print('Δt: %ss' %(format((secondaryTime - primaryTime), '.2f')))
+            self.LiDARcomponents = newComponents
+
+        # Calculating Δt in seconds.
+        secondaryTime = time.time()
+        self.ΔTime = round(secondaryTime - primaryTime, 2)
+
+        return self.LiDARcomponents
 
     def get_scan_matrix(self, matrix, scan):
         # Getting hit coordinates relative to LiDAR position in meters!
@@ -195,7 +215,7 @@ class LiDAR:
         components = connectedLiDAR[2]
         totalComponents = connectedLiDAR[0]
 
-        # Making a dictionary of the components. TODO: Change to np.array for performance reasons.
+        # Making a dictionary of the components.
         for i in range(totalComponents - 1):
             if components[i + 1, cv2.CC_STAT_AREA] >= self.AREA_THRESHOLD:
                 component = Component(
@@ -209,24 +229,13 @@ class LiDAR:
                 
                 componentsN.append(component)
 
-        componentsN = np.array(componentsN)
-
-        # Filtering the LiDAR components, compared to their historical counterparts. 
-        if len(self.LiDARcomponents) > 0:
-            filteredComponents = self.filter(componentsN)
-        else:
-            for component in componentsN:
-                component.generate_id()
-
-            self.LiDARcomponents = componentsN
-            filteredComponents = componentsN
-
+        return np.array(componentsN)
+        
+    def render_scan(self, components):
         # Making a new matrix to drawn on with the filtered components!
-        canvasMatrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X)).astype(np.int16)
+        canvasMatrix = np.zeros((self.RESOLUTION_Y, self.RESOLUTION_X)).astype(np.uint8)
 
-        for i, component in enumerate(filteredComponents):
-            print(f"COMPONENT {component.ID}: \n x: {component.x} | y: {component.y} | width: {component.width} | height: {component.height}")
-
+        for component in components:
             # Get the component geometry which acts as a "Paintbrush"
             brush = component.geometry
             brush[brush > 0] = component.ID % self.MAX_VISUALIZATION
@@ -234,11 +243,17 @@ class LiDAR:
             # Draw the component
             canvasMatrix += brush
 
-        # Synchronizing with main thread and graphing the matrix in matplotlib. 
-        with self.matrix_lock:
-            self.graphingMatrix = canvasMatrix
+        return canvasMatrix
 
-    def filter(self, newComponents):
+    def print_output(self):
+        print('==NEXT======================================NEXT==')
+
+        for component in self.LiDARcomponents:
+            print(f"COMPONENT {component.ID}: \n x: {component.x} | y: {component.y} | width: {component.width} | height: {component.height}")
+
+        print('Δt: %ss' %(format((self.ΔTime), '.2f')))
+
+    def filter_components(self, newComponents):
         newComponents = np.array(newComponents)
 
         for component in self.LiDARcomponents:
@@ -255,17 +270,25 @@ class LiDAR:
             if component.ID == None:
                 component.generate_id()
 
-        self.LiDARcomponents = np.array(newComponents)
+        return np.array(newComponents)
 
-        print(f"There are {len(self.LiDARcomponents)} component(s)!")
+if __name__ == "__main__":
+    font = {'family' : 'URW Gothic',
+        'weight' : 'bold',
+        'size'   : 14}
 
-        return self.LiDARcomponents
+    plt.rc('font', **font)
 
+    currentLiDAR = LiDAR()
 
-currentLiDAR = LiDAR()
+    # Setting up and starting the scan thread
+    scanThread = threading.Thread(target = currentLiDAR.scan_thread, kwargs={'render': True})
+    scanThread.daemon = True
+    scanThread.start()
 
-while True:
-    try:
-        currentLiDAR.update()
-    except KeyboardInterrupt:
-        break
+    while True:
+        try:
+            currentLiDAR.update()
+            currentLiDAR.print_output()
+        except KeyboardInterrupt:
+            break

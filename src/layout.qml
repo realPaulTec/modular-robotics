@@ -27,26 +27,26 @@ ApplicationWindow {
             anchors.fill: parent
 
             RowLayout {
-                anchors.top: parent.top
+                // anchors.top: parent.top
 
                 Image {
-                        id: trackingImage
-                        fillMode: Image.PreserveAspectFit
+                    id: trackingImage
+                    fillMode: Image.PreserveAspectFit
 
-                        Layout.fillHeight: true
-                        Layout.fillWidth: true
-                        
-                        source: 'image://imageprovider/trackingImage.png'
-                        objectName: 'trackingImage'
+                    Layout.fillHeight: true
+                    Layout.fillWidth: true
+                    
+                    source: 'image://imageprovider/trackingImage.png'
+                    objectName: 'trackingImage'
 
-                        Timer {
-                            id: imageTimer
-                            interval: 30
-                            repeat: true
-                            running: true
-                            onTriggered: {
-                                trackingImage.source = 'image://imageprovider/secondaryTrackingImage.png'
-                                trackingImage.source = 'image://imageprovider/trackingImage.png'
+                    Timer {
+                        id: imageTimer
+                        interval: 30
+                        repeat: true
+                        running: true
+                        onTriggered: {
+                            trackingImage.source = 'image://imageprovider/secondaryTrackingImage.png'
+                            trackingImage.source = 'image://imageprovider/trackingImage.png'
                         }
                     }
                 }
@@ -515,6 +515,7 @@ ApplicationWindow {
                             Layout.preferredWidth: parent.width * 0.6
 
                             model: [
+                                "LiDAR",
                                 "camera feed",
                                 "color corrected",
                                 "masked frame",

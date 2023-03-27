@@ -308,7 +308,7 @@ class systemTrack:
                 history = np.array(component.history)
                 median = np.median(history)
 
-                frequencies.append(round(1 / (median * 2), 2))
+                frequencies.append(round(1 / median, 2))
                 component.history = []
 
         # Get the frequency which is the closest match to the desired one.

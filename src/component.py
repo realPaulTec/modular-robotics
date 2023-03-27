@@ -78,6 +78,9 @@ class Component:
         else:
             return None, None
 
+    def get_real_coordinates(self):
+        pass
+
     def generate_id(self):
         # Generate a unique identity
         self.ID = Component.ID
