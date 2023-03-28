@@ -495,7 +495,7 @@ ApplicationWindow {
             }
 
             RowLayout {
-                spacing: 40
+                spacing: 60
                 width: parent.width
                 height: 220
 
@@ -543,6 +543,29 @@ ApplicationWindow {
                                 Layout.alignment: Qt.AlignLeft
 
                                 font.pointSize: 12
+                                text: 'Components: '
+                                color: '#FFFFFF'
+                            }
+
+                            Text {
+                                id: textAmountComponents
+                                objectName: "textAmountComponents"
+                                Layout.alignment: Qt.AlignRight
+
+                                font.pointSize: 12
+                                text: 'xxx'
+                                color: '#FFFFFF'
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+                            
+                            Text {
+                                Layout.alignment: Qt.AlignLeft
+
+                                font.pointSize: 12
                                 text: 'Use Mask: '
                                 color: '#FFFFFF'
                             }
@@ -552,22 +575,6 @@ ApplicationWindow {
                                 position: 0
 
                                 onCheckedChanged: signalHandeler.buttonMaskSelection(position)
-                            }
-                        }
-
-                        SpinBox {
-                            id: erosionSpinBox
-                            
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredWidth: parent.width * 0.6
-
-                            value: 4
-
-                            onValueChanged: signalHandeler.erosionSelection(value)
-
-                            ToolTip {
-                                visible: erosionSpinBox.hovered
-                                text: 'Erosion Steps'
                             }
                         }
                     }
@@ -581,25 +588,6 @@ ApplicationWindow {
 
                     ColumnLayout {
                         anchors.fill: parent
-
-                        SpinBox {
-                            id: differenceSpinBox
-
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredWidth: parent.width * 0.6
-
-                            from: 0
-                            to: 500
-                            value: 140
-                            stepSize: 10
-
-                            onValueChanged: signalHandeler.setMaxDifference(value)
-
-                            ToolTip {
-                                visible: differenceSpinBox.hovered
-                                text: 'Max Difference'
-                            }
-                        }
 
                         SpinBox {
                             id: frequencySpinBox
@@ -623,39 +611,48 @@ ApplicationWindow {
                         }
 
                         SpinBox {
-                            id: lifetimeSpinBox
+                            id: frequencyBufferSpinBox
 
                             Layout.alignment: Qt.AlignHCenter
                             Layout.preferredWidth: parent.width * 0.6
-                            
+
                             from: 0
-                            to: 100 * 100
-                            value: 100
-                            stepSize: 5
-                            
-                            property int decimals: 2
-                            property real realValue: value / 100
+                            to: 6
+
+                            value: 2
 
                             onValueChanged: {
-                                signalHandeler.setLifetime(value)
-                            }
-
-                            validator: DoubleValidator {
-                                bottom: Math.min(lifetimeSpinBox.from, lifetimeSpinBox.to)
-                                top:  Math.max(lifetimeSpinBox.from, lifetimeSpinBox.to)
-                            }
-
-                            textFromValue: function(value, locale) {
-                                return Number(value / 100).toLocaleString(locale, 'f', lifetimeSpinBox.decimals)
-                            }
-
-                            valueFromText: function(text, locale) {
-                                return Number.fromLocaleString(locale, text) * 100
+                                signalHandeler.setFrequencyBuffer(value)
                             }
 
                             ToolTip {
-                                visible: lifetimeSpinBox.hovered
-                                text: 'Component Lifetime (s)'
+                                visible: frequencyBufferSpinBox.hovered
+                                text: 'Frequency Buffer'
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+
+                            Layout.preferredHeight: parent.height * 0.2
+                            
+                            Label {
+                                Layout.alignment: Qt.AlignLeft
+
+                                font.pointSize: 12
+                                text: 'Frequency: '
+                                color: '#FFFFFF'
+                            }
+
+                            Label {
+                                id: frequencyComponents
+                                objectName: "frequencyComponents"
+                                Layout.alignment: Qt.AlignRight
+
+                                font.pointSize: 12
+                                text: 'xxx'
+                                color: '#FFFFFF'
                             }
                         }
                     }
@@ -747,70 +744,75 @@ ApplicationWindow {
                     ColumnLayout {
                         anchors.fill: parent
 
-                        RowLayout {
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.preferredWidth: parent.width * 0.6
-                            
-                            Text {
-                                Layout.alignment: Qt.AlignLeft
-
-                                font.pointSize: 12
-                                text: 'Components: '
-                                color: '#FFFFFF'
-                            }
-
-                            Text {
-                                id: textAmountComponents
-                                objectName: "textAmountComponents"
-                                Layout.alignment: Qt.AlignRight
-
-                                font.pointSize: 12
-                                text: 'xxx'
-                                color: '#FFFFFF'
-                            }
-                        }
-
                         SpinBox {
-                            id: frequencyBufferSpinBox
+                            id: differenceSpinBox
 
                             Layout.alignment: Qt.AlignHCenter
                             Layout.preferredWidth: parent.width * 0.6
 
                             from: 0
-                            to: 6
+                            to: 500
+                            value: 140
+                            stepSize: 10
 
-                            value: 2
-
-                            onValueChanged: {
-                                signalHandeler.setFrequencyBuffer(value)
-                            }
+                            onValueChanged: signalHandeler.setMaxDifference(value)
 
                             ToolTip {
-                                visible: frequencyBufferSpinBox.hovered
-                                text: 'Frequency Buffer'
+                                visible: differenceSpinBox.hovered
+                                text: 'Max Difference'
                             }
                         }
+                        
+                        SpinBox {
+                            id: lifetimeSpinBox
 
-                        RowLayout {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.preferredWidth: parent.width * 0.6
                             
-                            Text {
-                                Layout.alignment: Qt.AlignLeft
+                            from: 0
+                            to: 100 * 100
+                            value: 100
+                            stepSize: 5
+                            
+                            property int decimals: 2
+                            property real realValue: value / 100
 
-                                font.pointSize: 12
-                                text: 'Frequency: '
-                                color: '#FFFFFF'
+                            onValueChanged: {
+                                signalHandeler.setLifetime(value)
                             }
 
-                            Text {
-                                id: frequencyComponents
-                                objectName: "frequencyComponents"
-                                Layout.alignment: Qt.AlignRight
+                            validator: DoubleValidator {
+                                bottom: Math.min(lifetimeSpinBox.from, lifetimeSpinBox.to)
+                                top:  Math.max(lifetimeSpinBox.from, lifetimeSpinBox.to)
+                            }
 
-                                font.pointSize: 12
-                                text: 'xxx'
-                                color: '#FFFFFF'
+                            textFromValue: function(value, locale) {
+                                return Number(value / 100).toLocaleString(locale, 'f', lifetimeSpinBox.decimals)
+                            }
+
+                            valueFromText: function(text, locale) {
+                                return Number.fromLocaleString(locale, text) * 100
+                            }
+
+                            ToolTip {
+                                visible: lifetimeSpinBox.hovered
+                                text: 'Component Lifetime (s)'
+                            }
+                        }
+
+                        SpinBox {
+                            id: erosionSpinBox
+                            
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.preferredWidth: parent.width * 0.6
+
+                            value: 4
+
+                            onValueChanged: signalHandeler.erosionSelection(value)
+
+                            ToolTip {
+                                visible: erosionSpinBox.hovered
+                                text: 'Erosion Steps'
                             }
                         }
                     }
