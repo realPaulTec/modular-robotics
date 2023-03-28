@@ -19,6 +19,7 @@ import cv2
 np.set_printoptions(threshold=sys.maxsize)
 
 RECONNECTS = 2
+LiDAR_ACTIVE = False
 
 try:
     # Get system cameras and show them to the user.
@@ -48,7 +49,9 @@ try:
             print(f'ERROR: attempting to reconnect | {i} / {RECONNECTS}')
             time.sleep(2)
 
-            if i == 2:  sys.exit()
+            if i == 2:
+                LiDAR_ACTIVE = True
+                break
             else: continue
 
 except KeyboardInterrupt:
@@ -87,7 +90,7 @@ class Backend:
     def interfaceCycle(self, kill = False):
         tracker.mainCycle()
 
-        if self.signalHandeler.dropdownSelection == "LiDAR":
+        if self.signalHandeler.dropdownSelection == "LiDAR" and LiDAR_ACTIVE == True:
             # Getting LiDAR image!
             lidarData = currentLiDAR.graphingMatrix
             
@@ -336,9 +339,10 @@ if __name__ == "__main__":
     applicationBackend = Backend('src/layout.qml', ImageProvider(QQmlImageProviderBase.ImageType.Image))
 
     # Setting up and starting the scan thread for the LiDAR
-    scanThread = threading.Thread(target = currentLiDAR.scan_thread)
-    scanThread.daemon = True
-    scanThread.start()
-
+    if LiDAR_ACTIVE == True:
+        scanThread = threading.Thread(target = currentLiDAR.scan_thread)
+        scanThread.daemon = True
+        scanThread.start()
+    
     # Exiting on window close
     sys.exit(application.exec())
