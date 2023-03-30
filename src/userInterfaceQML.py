@@ -41,18 +41,22 @@ try:
 
         sys.exit()
 
-    for i in range(RECONNECTS):
+    for i in range(RECONNECTS - 1):
         try:
             currentLiDAR = avL.LiDAR()
+            LiDAR_ACTIVE = True
 
         except Exception:
             print(f'ERROR: attempting to reconnect | {i} / {RECONNECTS}')
             time.sleep(2)
 
-            if i == 2:
-                LiDAR_ACTIVE = True
+            if i == (RECONNECTS - 1):
                 break
+
             else: continue
+
+        else:
+            break
 
 except KeyboardInterrupt:
     print('\n\nExiting on KeyboardInterrupt!')
@@ -90,7 +94,7 @@ class Backend:
     def interfaceCycle(self, kill = False):
         tracker.mainCycle()
 
-        if self.signalHandeler.dropdownSelection == "LiDAR" and LiDAR_ACTIVE == True:
+        if LiDAR_ACTIVE == True and self.signalHandeler.dropdownSelection == "LiDAR":
             # Getting LiDAR image!
             lidarData = currentLiDAR.graphingMatrix
             
@@ -105,7 +109,7 @@ class Backend:
             interfaceFrame = lidarData
 
         else:
-            currentFrame = tracker.frameHistory[self.signalHandeler.dropdownSelection]
+            currentFrame = np.array(tracker.frameHistory.get(self.signalHandeler.dropdownSelection, tracker.frameHistory["final"]))
 
             # Fixing the image for QML integration
             interfaceFrame = cv2.cvtColor(currentFrame, cv2.COLOR_BGR2RGB)
@@ -343,6 +347,6 @@ if __name__ == "__main__":
         scanThread = threading.Thread(target = currentLiDAR.scan_thread)
         scanThread.daemon = True
         scanThread.start()
-    
+
     # Exiting on window close
     sys.exit(application.exec())
