@@ -8,8 +8,7 @@ from sklearn.cluster import DBSCAN
 
 
 def calculate_mean_angle(angles):
-    # Berens, P. (2009). CircStat: A MATLAB Toolbox for Circular Statistics. Journal of Statistical Software, 31(10), 1-21 
-    # https://www.jstatsoft.org/article/view/v031i10
+    # Euler's formula: e^(iθ)=cos(θ)+i*sin(θ)
 
     # convert angles to unit vectors in the complex plane
     complex_numbers = [np.exp(1j * angle) for angle in angles]
