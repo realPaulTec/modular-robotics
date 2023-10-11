@@ -6,6 +6,22 @@ import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.cluster import DBSCAN
 
+
+def calculate_mean_angle(angles):
+    # Berens, P. (2009). CircStat: A MATLAB Toolbox for Circular Statistics. Journal of Statistical Software, 31(10), 1-21 
+    # https://www.jstatsoft.org/article/view/v031i10
+
+    # convert angles to unit vectors in the complex plane
+    complex_numbers = [np.exp(1j * angle) for angle in angles]
+    
+    # compute the mean complex number
+    mean_complex = sum(complex_numbers) / len(complex_numbers)
+    
+    # retrieve the angle of the mean complex number
+    mean_angle = np.angle(mean_complex)
+    
+    return mean_angle
+
 class LidarScanner:
     # scanning constants
     MAX_DISTANCE_METERS = 0.2
@@ -75,8 +91,7 @@ class LidarScanner:
             distance, angle = self.perform_scan()
 
             clusters = self.perform_clustering(distance, angle)
-            self.clusters = clusters
-
+            
             if self.tracking == True:
                 self.perform_tracking(clusters)   
             else:
@@ -84,6 +99,7 @@ class LidarScanner:
 
             # draw distance and angle for next cycle
             with self.distance_lock, self.angle_lock:
+                self.clusters = clusters
                 self.distance.clear(), self.angle.clear()
                 self.distance, self.angle = distance, angle
 
@@ -98,8 +114,25 @@ class LidarScanner:
         clusters = {}
         for i, label in enumerate(labels):
             if label not in clusters:
-                clusters[label] = []
-            clusters[label].append(coordinates[i])
+                clusters[label] = {
+                    'points': [],
+                    'total_distance': 0,
+                    'count': 0,
+                    'central_position': (0, 0)
+                }
+            
+            clusters[label]['points'].append(coordinates[i])
+            
+            # Update the running totals for distance
+            clusters[label]['total_distance'] += coordinates[i][1]
+            clusters[label]['count'] += 1
+        
+        # After the loop, compute the central angle for each cluster using the above method
+        for label, cluster_data in clusters.items():
+            all_angles = [point[0] for point in cluster_data['points']]
+            mean_angle = calculate_mean_angle(all_angles)
+            mean_distance = cluster_data['total_distance'] / cluster_data['count']
+            cluster_data['central_position'] = (mean_angle, mean_distance)
 
         return clusters
 
@@ -131,10 +164,14 @@ class LidarScanner:
             self.axis.scatter(self.angle, self.distance, s=5, c="#ff5050")
             
             # Visualizing clusters
-            for label, points in self.clusters.items():
-                cluster_angles, cluster_distances = zip(*points)
+            for label, cluster_data in self.clusters.items():
+                cluster_angles, cluster_distances = zip(*cluster_data['points'])
                 self.axis.scatter(cluster_angles, cluster_distances, s=20, marker='o')
-            
+                
+                # Visualizing central position
+                central_angle, central_distance = cluster_data['central_position']
+                self.axis.scatter(central_angle, central_distance, s=60, c="#FFD700", marker='*')  # Using a star marker for central position
+                
             # Visualizing tracked point
             if self.tracked_point:
                 self.axis.scatter([self.tracked_point[0]], [self.tracked_point[1]], s=60, c="#00FF00", marker='x')
@@ -148,6 +185,7 @@ class LidarScanner:
         # updating canvas
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
+
 
 if __name__ == "__main__":
     # generating new lidar class "scanner"
