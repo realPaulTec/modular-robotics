@@ -1,4 +1,5 @@
 from collections import defaultdict
+from matplotlib import patches
 import pyrplidar
 import time
 import atexit
@@ -60,21 +61,37 @@ def calculate_mean_angle(angles):
     
     return mean_angle
 
+def calculate_distance(primary, secondary):
+    angle1, distance1 = primary  # primary point (angle, distance)
+    angle2, distance2 = secondary  # secondary point (angle, distance)
+    
+    # Convert the primary and secondary points to complex numbers
+    primary_complex = distance1 * np.exp(1j * angle1)
+    secondary_complex = distance2 * np.exp(1j * angle2)
+    
+    # Calculate the distance between the primary and secondary points
+    distance = np.abs(primary_complex - secondary_complex)
+    
+    return distance
+
 class LidarScanner:
     # scanning constants
-    MAX_DISTANCE_METERS = 0.4
-    SAMPLE_RATE = 1080
+    MAX_DISTANCE_METERS = 5
+    SAMPLE_RATE = 720
     SCAN_MODE = 2
-    MOTOR_SPEED = 800
+    MOTOR_SPEED = 600
 
     # acquisition constants
-    FIXED_DISTANCE = 0.125
-    FIXED_ANGLE = np.deg2rad(90)
-    RADIUS = 0.05
+    ACQUISITION_DISTANCE = 0.5
+    ACQUISITION_RADIUS = 0.2
 
     # DBSCAN constants
-    DBSCAN_EPS = 0.2
-    DBSCAN_MIN_SAMPLES = 8
+    DBSCAN_EPS = 0.1
+    DBSCAN_MIN_SAMPLES = 8 # 8
+
+    # tracking constants
+    MAX_TRACK_DEVIATION = 0.3
+    MAX_TRACK_LIFETIME = 2.0
 
     def __init__(self):
         # lidar and plotting setup
@@ -89,12 +106,15 @@ class LidarScanner:
         self.tracking = False
         self.tracked_point = None
         self.clusters = {}
+        self.last_track = time.time()
 
         self.long_delta_time = {
             "main" : [],
             "scanning" : [],
             "clustering" : []
         }
+
+        self.SAMPLE_RATE = int(round(self.SAMPLE_RATE))
 
     def exit_handler(self):
         self.lidar.set_motor_pwm(0)
@@ -164,8 +184,6 @@ class LidarScanner:
                 self.long_delta_time["scanning"].pop(-1)
                 self.long_delta_time["clustering"].pop(-1)
 
-                print('100 DELTA')
-
             # draw distance and angle for next cycle
             with self.cluster_lock:
                 self.clusters = clusters
@@ -205,12 +223,37 @@ class LidarScanner:
         return clusters
 
     def acquire_track(self, clusters):
-        # Logic to acquire track
-        pass
+        
+        for label, cluster_data in clusters.items():
+            if label == -1:
+                continue
+
+            distance = calculate_distance(cluster_data['central_position'], (0, self.ACQUISITION_DISTANCE))
+
+            if distance < self.ACQUISITION_RADIUS:
+                self.tracked_point = cluster_data['central_position']
+                self.tracking = True
+                self.last_track = time.time()
+                break
 
     def perform_tracking(self, clusters):
-        # Logic to update track
-        pass
+        new_track = False
+
+        for label, cluster_data in clusters.items():
+            if label == -1:
+                continue
+
+            distance = calculate_distance(cluster_data['central_position'], (self.tracked_point))
+
+            if distance < self.MAX_TRACK_DEVIATION:
+                self.tracked_point = cluster_data['central_position']
+                self.last_track = time.time()
+                new_track = True
+                break
+        
+        if new_track == False and (self.last_track + self.MAX_TRACK_LIFETIME) < time.time():
+            self.tracking = False
+            self.tracked_point = (0, self.ACQUISITION_DISTANCE)            
 
     def perform_scan(self):
         # Pre-allocating arrays
@@ -242,15 +285,20 @@ class LidarScanner:
                     continue
 
                 cluster_angles, cluster_distances = zip(*cluster_data['points'])
-                self.axis.scatter(cluster_angles, cluster_distances, s=20, marker='o')
+                self.axis.scatter(cluster_angles, cluster_distances, s=40, marker='o')
                 
                 # Visualizing central position
                 central_angle, central_distance = cluster_data['central_position']
-                self.axis.scatter(central_angle, central_distance, s=60, c="#FFD700", marker='*')  # Using a star marker for central position
-                
+                self.axis.scatter(central_angle, central_distance, s=60, c="#FFD700", marker='*')
+            
+            # Drawing acquisition circle
+            if not self.tracking:
+                circle = plt.Circle((self.ACQUISITION_DISTANCE, 0.0), self.ACQUISITION_RADIUS, transform=self.axis.transData._b, color="yellow", fill=False)
+                self.axis.add_artist(circle)
+            
             # Visualizing tracked point
-            if self.tracked_point:
-                self.axis.scatter([self.tracked_point[0]], [self.tracked_point[1]], s=60, c="#00FF00", marker='x')
+            else:
+                self.axis.scatter([self.tracked_point[0]], [self.tracked_point[1]], s=1200, c="#00FF00", marker='x')
 
             # scaling the axis to the max range
             self.axis.set_ybound(0, self.MAX_DISTANCE_METERS)
