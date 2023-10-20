@@ -7,7 +7,7 @@ import threading
 import matplotlib.pyplot as plt
 import numpy as np
 from sklearn.cluster import DBSCAN
-
+from filterpy.kalman import KalmanFilter
 
 # old mean angle function (20s): MEAN DELTA TIME: 0.118468
 # new mean angle function (20s): MEAN DELTA TIME: 0.11863
@@ -74,9 +74,21 @@ def calculate_distance(primary, secondary):
     
     return distance
 
+def mahalanobis_distance(x, μ, Σ):
+    # D² = (x - μ)' Σ⁻¹ (x - μ)
+    # 
+    # D: Mahalanobis distance
+    # x: object state
+    # μ: predicted state
+    # Σ: covariance matrix
+
+    delta = x - μ
+    inv_Σ = np.linalg.inv(Σ)
+    return np.sqrt(np.dot(np.dot(delta, inv_Σ), delta.T))
+
 class LidarScanner:
     # scanning constants
-    MAX_DISTANCE_METERS = 5
+    MAX_DISTANCE_METERS = 2.5
     SAMPLE_RATE = 720
     SCAN_MODE = 2
     MOTOR_SPEED = 600
@@ -87,24 +99,29 @@ class LidarScanner:
 
     # DBSCAN constants
     DBSCAN_EPS = 0.1
-    DBSCAN_MIN_SAMPLES = 8 # 8
+    DBSCAN_MIN_SAMPLES = 8
 
     # tracking constants
-    MAX_TRACK_DEVIATION = 0.3
+    MAX_TRACK_DEVIATION = 0.6
     MAX_TRACK_LIFETIME = 2.0
 
     def __init__(self):
         # lidar and plotting setup
         self.setup_lidar()
         self.setup_plot()
+        self.setup_kalman()
         
         # locks for threading
         self.cluster_lock = threading.Lock()
 
+        # UI variables
+        self.show_hits = True
+
         # class variables
         self.coordinates = []
         self.tracking = False
-        self.tracked_point = None
+        self.tracked_point = []
+        self.prediction = []
         self.clusters = {}
         self.last_track = time.time()
 
@@ -151,6 +168,35 @@ class LidarScanner:
         self.axis = self.fig.add_subplot(111, projection='polar')
         self.axis.set_facecolor('black')
         self.axis.tick_params(which='both', colors='#55ddffff')
+
+    def setup_kalman(self):
+        self.kalman_filter = KalmanFilter(dim_x=4, dim_z=2)
+        
+        # Initial State [x_position, x_velocity, y_position, y_velocity]
+        self.kalman_filter.x = np.array([self.ACQUISITION_DISTANCE, 0., 0., 0.])
+        
+        # State Transition Matrix
+        self.kalman_filter.F = np.array([[1, 1, 0, 0],
+                                         [0, 1, 0, 0],
+                                         [0, 0, 1, 1],
+                                         [0, 0, 0, 1]])
+        
+        # Measurement Matrix
+        self.kalman_filter.H = np.array([[1, 0, 0, 0],
+                                         [0, 0, 1, 0]])
+        
+        # Initial Uncertainty
+        self.kalman_filter.P *= 1
+        
+        # Process Uncertainty
+        self.kalman_filter.Q = np.array([[1, 1, 0, 0],
+                                         [1, 1, 0, 0],
+                                         [0, 0, 1, 1],
+                                         [0, 0, 1, 1]])
+        
+        # Measurement Uncertainty
+        self.kalman_filter.R = np.array([[1, 0],
+                                         [0, 1]]) * 0.5
 
     def continuous_tracking(self):
         while True:
@@ -203,7 +249,8 @@ class LidarScanner:
             'points': [],
             'total_distance': 0,
             'count': 0,
-            'central_position': (0, 0)
+            'central_position': (0, 0),
+            'mahalanobis_distance': 0
         })
         
         for i, label in enumerate(labels):
@@ -223,7 +270,6 @@ class LidarScanner:
         return clusters
 
     def acquire_track(self, clusters):
-        
         for label, cluster_data in clusters.items():
             if label == -1:
                 continue
@@ -232,28 +278,49 @@ class LidarScanner:
 
             if distance < self.ACQUISITION_RADIUS:
                 self.tracked_point = cluster_data['central_position']
+                self.kalman_filter.update(np.array([self.tracked_point[1] * np.cos(self.tracked_point[0]), self.tracked_point[1] * np.sin(self.tracked_point[0])]))
                 self.tracking = True
                 self.last_track = time.time()
                 break
 
     def perform_tracking(self, clusters):
-        new_track = False
+        # make a prediction for the next position
+        self.kalman_filter.predict()
+        current_prediction = np.array([self.kalman_filter.x[0], self.kalman_filter.x[2]])
 
+        # extract position parts of the covariance matrix Σ
+        covariance_matrix = self.kalman_filter.P[np.ix_([0, 2], [0, 2])]
+        
         for label, cluster_data in clusters.items():
+            # skip noise
             if label == -1:
                 continue
 
-            distance = calculate_distance(cluster_data['central_position'], (self.tracked_point))
+            # set Mahalanobis distance for each cluster TODO: implement velocity
+            cluster_data['mahalanobis_distance'] = np.round(mahalanobis_distance(cluster_data['central_position'], current_prediction, covariance_matrix), decimals=3)
 
-            if distance < self.MAX_TRACK_DEVIATION:
-                self.tracked_point = cluster_data['central_position']
-                self.last_track = time.time()
-                new_track = True
-                break
+        # filter the keys by distance threshold
+        filtered_keys = [k for k in clusters.keys() if k != -1 and calculate_distance(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_DEVIATION]
         
-        if new_track == False and (self.last_track + self.MAX_TRACK_LIFETIME) < time.time():
+        # find cluster with lowest Mahalanobis distance
+        closest_cluster_label = min(filtered_keys, key=lambda k: clusters[k]['mahalanobis_distance'], default=None)
+
+        if closest_cluster_label:
+            # set tracked position
+            self.tracked_point = clusters[closest_cluster_label]['central_position']
+            self.last_track = time.time()
+
+            # update Kalman filter
+            self.kalman_filter.update(np.array([self.tracked_point[1] * np.cos(self.tracked_point[0]), self.tracked_point[1] * np.sin(self.tracked_point[0])]))
+        
+        elif (self.last_track + self.MAX_TRACK_LIFETIME) < time.time():
+            # reset lost track after lifetime exceeded 
+            self.tracked_point = []
             self.tracking = False
-            self.tracked_point = (0, self.ACQUISITION_DISTANCE)            
+        
+        # make a prediction for the next position, this is the end point of the red arrow
+        self.kalman_filter.predict()
+        self.prediction = self.kalman_filter.x[0], self.kalman_filter.x[2]
 
     def perform_scan(self):
         # Pre-allocating arrays
@@ -278,27 +345,42 @@ class LidarScanner:
             # clearing axis and scattering new data
             self.axis.clear()
             
-            # Visualizing clusters
+            # visualizing clusters
             for label, cluster_data in self.clusters.items():
-                # don't render noise
+                # skip noise
                 if label == -1:
                     continue
-
-                cluster_angles, cluster_distances = zip(*cluster_data['points'])
-                self.axis.scatter(cluster_angles, cluster_distances, s=40, marker='o')
                 
-                # Visualizing central position
+                alpha = 1
+
+                if len(self.tracked_point) > 0 and calculate_distance(self.tracked_point, cluster_data['central_position']) > self.MAX_TRACK_DEVIATION:
+                    alpha = 0.05
+
+                if self.show_hits == True:
+                    cluster_angles, cluster_distances = zip(*cluster_data['points'])
+                    self.axis.scatter(cluster_angles, cluster_distances, s=40, marker='o', alpha=alpha)
+                
+                # visualizing central position
                 central_angle, central_distance = cluster_data['central_position']
                 self.axis.scatter(central_angle, central_distance, s=60, c="#FFD700", marker='*')
+
+                # annotating Mahalanobis distance for each cluster
+                self.axis.annotate(cluster_data['mahalanobis_distance'], cluster_data['central_position'], color='white')
             
-            # Drawing acquisition circle
-            if not self.tracking:
+            # visualizing tracked point
+            if len(self.tracked_point) > 0:
+                self.axis.scatter([self.tracked_point[0]], [self.tracked_point[1]], s=1500, c="#00FF00", marker='x')
+
+            # drawing acquisition circle
+            else:
                 circle = plt.Circle((self.ACQUISITION_DISTANCE, 0.0), self.ACQUISITION_RADIUS, transform=self.axis.transData._b, color="yellow", fill=False)
                 self.axis.add_artist(circle)
-            
-            # Visualizing tracked point
-            else:
-                self.axis.scatter([self.tracked_point[0]], [self.tracked_point[1]], s=1200, c="#00FF00", marker='x')
+
+            # drawing vector from track to prediction
+            if len(self.prediction) > 0 and len(self.tracked_point) > 0:
+                x_track, y_track = self.tracked_point[1] * np.cos(self.tracked_point[0]), self.tracked_point[1] * np.sin(self.tracked_point[0])             
+                arrow = plt.arrow(x_track, y_track, (self.prediction[0]-x_track), (self.prediction[1]-y_track), width=0.002, length_includes_head=True, transform=self.axis.transData._b, color='red')
+                self.axis.add_artist(arrow)
 
             # scaling the axis to the max range
             self.axis.set_ybound(0, self.MAX_DISTANCE_METERS)
