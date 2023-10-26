@@ -9,43 +9,6 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from filterpy.kalman import KalmanFilter
 
-# old mean angle function (20s): MEAN DELTA TIME: 0.118468
-# new mean angle function (20s): MEAN DELTA TIME: 0.11863
-# -> no difference
-
-# python list for scanning: 
-#
-# MEAN DELTA TIME OVER 500 ITERATIONS (6 minutes)
-# MAIN: 0.11206554222106933
-# SCANNING: 0.10442154598236084
-# CLUSTERING: 0.007629129409790039
-
-# np array for scanning: 
-#
-# MEAN DELTA TIME OVER 500 ITERATIONS (6 minutes)
-# MAIN: 0.11229584789276123
-# SCANNING: 0.1050695242881775
-# CLUSTERING: 0.007212021350860596
-
-# Different Scan Modes (100 iteration mean, 720 samples):
-# 0: 0.200039381980896      | bad quality
-# 1: 0.1994147777557373     | bad quality
-# 2: 0.11259601593017578    |
-# 3: 0.11345351457595826    |
-# 4: 0.1752121329307556     |
-
-# Different motor speeds (100 iteration mean, 720 samples, mode 2)
-# PWM 400   : 0.11333080530166625  | bad quality
-# PWM 600   : 0.11225196838378906  |
-# PWM 800   : 0.11141704082489014  |
-# PWM 1000  : 0.1111382269859314   | bad for hardware
-
-# Different sample rates (100 iteration mean, mode 2)
-# 360   : 0.0660561227798462    | bad quality (unusable)
-# 720   : 0.11093573808670044   |
-# 1080  : 0.15820626258850098   |
-#
-# >>> sample rate ~ scan time
 
 def calculate_mean_angle(angles):
     # Euler's formula: e^(iθ)=cos(θ)+i*sin(θ)
@@ -84,11 +47,12 @@ def mahalanobis_distance(x, μ, Σ):
 
     delta = x - μ
     inv_Σ = np.linalg.inv(Σ)
+
     return np.sqrt(np.dot(np.dot(delta, inv_Σ), delta.T))
 
 class LidarScanner:
     # scanning constants
-    MAX_DISTANCE_METERS = 2.5
+    MAX_DISTANCE_METERS = 5
     SAMPLE_RATE = 720
     SCAN_MODE = 2
     MOTOR_SPEED = 600
@@ -98,12 +62,13 @@ class LidarScanner:
     ACQUISITION_RADIUS = 0.2
 
     # DBSCAN constants
-    DBSCAN_EPS = 0.1
+    DBSCAN_EPS = 0.15
     DBSCAN_MIN_SAMPLES = 8
 
     # tracking constants
-    MAX_TRACK_DEVIATION = 0.6
+    MAX_TRACK_DEVIATION = 0.4
     MAX_TRACK_LIFETIME = 2.0
+    MAX_TRACK_RUNAWAY = 0.8
 
     def __init__(self):
         # lidar and plotting setup
@@ -288,24 +253,46 @@ class LidarScanner:
         self.kalman_filter.predict()
         current_prediction = np.array([self.kalman_filter.x[0], self.kalman_filter.x[2]])
 
-        # extract position parts of the covariance matrix Σ
-        covariance_matrix = self.kalman_filter.P[np.ix_([0, 2], [0, 2])]
+        # extract position parts of the covariance matrix Σ FIXME
+        covariance_matrix = self.kalman_filter.P[np.ix_([0, 1, 2, 3], [0, 1, 2, 3])]
         
         for label, cluster_data in clusters.items():
             # skip noise
             if label == -1:
                 continue
 
-            # set Mahalanobis distance for each cluster TODO: implement velocity
-            cluster_data['mahalanobis_distance'] = np.round(mahalanobis_distance(cluster_data['central_position'], current_prediction, covariance_matrix), decimals=3)
+            # set Mahalanobis distance for each cluster
+            # TODO: implement velocity by calculating velocity from last track to current position\
+            # FIXME 
 
-        # filter the keys by distance threshold
-        filtered_keys = [k for k in clusters.keys() if k != -1 and calculate_distance(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_DEVIATION]
+            velocity = current_prediction - np.array([cluster_data['central_position'][1] * np.cos(cluster_data['central_position'][0]),
+                                                      cluster_data['central_position'][1] * np.sin(cluster_data['central_position'][0])])
+            
+            predicted_velocity = np.array([self.kalman_filter.x[1], self.kalman_filter.x[3]])
+
+            # print(f"current: {np.round(velocity, decimals=3)} \npredicted: {np.round(predicted_velocity, decimals=3)}")
+
+            object_state = np.array([cluster_data['central_position'], velocity]).flatten()
+            predicted_state = np.array([current_prediction, predicted_velocity]).flatten()
+
+            cluster_data['mahalanobis_distance'] = np.round(mahalanobis_distance(object_state,
+                                                                                 predicted_state, covariance_matrix), decimals=3)
+        
+        # converting prediction to polar coordinates
+        current_prediction_polar = np.array([np.arctan2(current_prediction[1], current_prediction[0]), np.sqrt(current_prediction[0]**2 + current_prediction[1]**2)])
+
+        # filter the keys by distance threshold FIXME
+        filtered_keys = [k for k in clusters.keys() if k != -1 and 
+                         calculate_distance(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
+                         calculate_distance(clusters[k]['central_position'], current_prediction_polar) < self.MAX_TRACK_DEVIATION
+                         ]
         
         # find cluster with lowest Mahalanobis distance
         closest_cluster_label = min(filtered_keys, key=lambda k: clusters[k]['mahalanobis_distance'], default=None)
 
         if closest_cluster_label:
+            print(current_prediction_polar)
+
             # set tracked position
             self.tracked_point = clusters[closest_cluster_label]['central_position']
             self.last_track = time.time()
@@ -314,7 +301,7 @@ class LidarScanner:
             self.kalman_filter.update(np.array([self.tracked_point[1] * np.cos(self.tracked_point[0]), self.tracked_point[1] * np.sin(self.tracked_point[0])]))
         
         elif (self.last_track + self.MAX_TRACK_LIFETIME) < time.time():
-            # reset lost track after lifetime exceeded 
+            # reset lost track after lifetime exceeded
             self.tracked_point = []
             self.tracking = False
         
@@ -354,7 +341,7 @@ class LidarScanner:
                 alpha = 1
 
                 if len(self.tracked_point) > 0 and calculate_distance(self.tracked_point, cluster_data['central_position']) > self.MAX_TRACK_DEVIATION:
-                    alpha = 0.05
+                    alpha = 0.15
 
                 if self.show_hits == True:
                     cluster_angles, cluster_distances = zip(*cluster_data['points'])
@@ -391,7 +378,6 @@ class LidarScanner:
         # updating canvas
         self.fig.canvas.draw()
         self.fig.canvas.flush_events()
-
 
 if __name__ == "__main__":
     # generating new lidar class "scanner"
