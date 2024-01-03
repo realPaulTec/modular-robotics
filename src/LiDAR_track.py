@@ -45,12 +45,13 @@ def mahalanobis_distance(x, μ, Σ):
     # μ: predicted state
     # Σ: covariance matrix
 
-    delta = x - μ
+    delta = np.array(x) - np.array(μ)
+
     inv_Σ = np.linalg.inv(Σ)
 
     return np.sqrt(np.dot(np.dot(delta, inv_Σ), delta.T))
 
-def cartesian(rho, theta):
+def cartesian(theta, rho):
     return rho * np.cos(theta), rho * np.sin(theta)
 
 class LidarScanner:
@@ -260,15 +261,12 @@ class LidarScanner:
         
         # extract position parts of the covariance matrix Σ
         covariance_matrix = self.kalman_filter.P[np.ix_([0, 2], [0, 2])]
-
-        np.set_printoptions(threshold=np.inf)
-        print(covariance_matrix)
-        
+                
         for label, cluster_data in clusters.items():
             # skip noise
             if label == -1:
                 continue
-            
+
             # set Mahalanobis distance for each cluster | FIXME: cluster_data['central_position'] are POLAR that's WRONG. 
             cluster_data['mahalanobis_distance'] = np.round(
                 mahalanobis_distance(cartesian(*cluster_data['central_position']), current_prediction, covariance_matrix),
@@ -291,7 +289,7 @@ class LidarScanner:
             # set tracked position
             self.tracked_point = clusters[closest_cluster_label]['central_position']
             self.last_track = time.time()
-
+            
             # update Kalman filter
             self.kalman_filter.update(np.array([self.tracked_point[1] * np.cos(self.tracked_point[0]), self.tracked_point[1] * np.sin(self.tracked_point[0])]))
         
