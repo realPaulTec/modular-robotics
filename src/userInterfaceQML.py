@@ -16,6 +16,8 @@ import cv2
 
 # sudo apt-get install v4l-utils
 
+# sudo chmod 666 /dev/ttyUSB0
+
 np.set_printoptions(threshold=sys.maxsize)
 
 RECONNECTS = 2

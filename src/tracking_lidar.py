@@ -9,7 +9,6 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from filterpy.kalman import KalmanFilter
 
-
 def calculate_mean_angle(angles):
     # Euler's formula: e^(iθ)=cos(θ)+i*sin(θ)
 
@@ -62,7 +61,7 @@ class LidarScanner:
     MOTOR_SPEED = 600
 
     # acquisition constants
-    ACQUISITION_DISTANCE = 0.6 # 0.5
+    ACQUISITION_DISTANCE = 0.5
     ACQUISITION_RADIUS = 0.2
 
     # DBSCAN constants
@@ -70,7 +69,7 @@ class LidarScanner:
     DBSCAN_MIN_SAMPLES = 8
 
     # tracking constants
-    MAX_TRACK_DEVIATION = 0.4
+    MAX_TRACK_DEVIATION = 1.0
     MAX_TRACK_LIFETIME = 2.0
     MAX_TRACK_RUNAWAY = 0.4
 
@@ -94,19 +93,12 @@ class LidarScanner:
         self.clusters = {}
         self.last_track = time.time()
 
-        self.long_delta_time = {
-            "main" : [],
-            "scanning" : [],
-            "clustering" : []
-        }
-
         self.SAMPLE_RATE = int(round(self.SAMPLE_RATE))
 
     def exit_handler(self):
+        # Stop and disconnect LiDAR on program termination
         self.lidar.set_motor_pwm(0)
         self.lidar.disconnect()
-
-        print(f"MEAN DELTA TIME OVER 100 ITERATIONS:\nMAIN: {np.mean(np.array(self.long_delta_time['main']))}\nSCANNING: {np.mean(np.array(self.long_delta_time['scanning']))}\nCLUSTERING: {np.mean(np.array(self.long_delta_time['clustering']))}")
 
     def setup_lidar(self):
         # connecting to lidar hardware
@@ -166,6 +158,7 @@ class LidarScanner:
         # Measurement Uncertainty
         self.kalman_filter.R = np.array([[1, 0],
                                          [0, 1]]) * 0.5
+
     def continuous_tracking(self):
         while True:
             start_time = time.time()
@@ -173,7 +166,6 @@ class LidarScanner:
             # get LiDAR data from scan
             start_time_scanning = time.time()
             coordinates = self.perform_scan()
-            self.long_delta_time["scanning"].append(time.time() - start_time_scanning)
 
             # restart the loop when distance and angle are empty
             if not coordinates.any():
@@ -182,21 +174,12 @@ class LidarScanner:
 
                 continue
             
-            start_time_clustering = time.time()
             clusters = self.perform_clustering(coordinates)
-            self.long_delta_time["clustering"].append(time.time() - start_time_clustering)
 
             if self.tracking == True:
                 self.perform_tracking(clusters)   
             else:
                 self.acquire_track(clusters)
-
-            self.long_delta_time["main"].append(time.time() - start_time)
-
-            if len(self.long_delta_time["main"]) > 100:
-                self.long_delta_time["main"].pop(-1)
-                self.long_delta_time["scanning"].pop(-1)
-                self.long_delta_time["clustering"].pop(-1)
 
             # draw distance and angle for next cycle
             with self.cluster_lock:
@@ -252,9 +235,6 @@ class LidarScanner:
                 break
 
     def perform_tracking(self, clusters):
-        # TODO check mahalanobis distance of points to previous *n* tracks, 
-        # n = 3 as standard
-
         # make a prediction for the next position
         self.kalman_filter.predict()
         current_prediction = np.array([self.kalman_filter.x[0], self.kalman_filter.x[2]])
@@ -289,7 +269,7 @@ class LidarScanner:
             # set tracked position
             self.tracked_point = clusters[closest_cluster_label]['central_position']
             self.last_track = time.time()
-            
+
             # update Kalman filter
             self.kalman_filter.update(np.array([self.tracked_point[1] * np.cos(self.tracked_point[0]), self.tracked_point[1] * np.sin(self.tracked_point[0])]))
         
