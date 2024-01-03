@@ -50,6 +50,9 @@ def mahalanobis_distance(x, μ, Σ):
 
     return np.sqrt(np.dot(np.dot(delta, inv_Σ), delta.T))
 
+def cartesian(rho, theta):
+    return rho * np.cos(theta), rho * np.sin(theta)
+
 class LidarScanner:
     # scanning constants
     MAX_DISTANCE_METERS = 5
@@ -58,7 +61,7 @@ class LidarScanner:
     MOTOR_SPEED = 600
 
     # acquisition constants
-    ACQUISITION_DISTANCE = 0.5
+    ACQUISITION_DISTANCE = 0.6 # 0.5
     ACQUISITION_RADIUS = 0.2
 
     # DBSCAN constants
@@ -68,7 +71,7 @@ class LidarScanner:
     # tracking constants
     MAX_TRACK_DEVIATION = 0.4
     MAX_TRACK_LIFETIME = 2.0
-    MAX_TRACK_RUNAWAY = 0.8
+    MAX_TRACK_RUNAWAY = 0.4
 
     def __init__(self):
         # lidar and plotting setup
@@ -151,18 +154,17 @@ class LidarScanner:
                                          [0, 0, 1, 0]])
         
         # Initial Uncertainty
-        self.kalman_filter.P *= 1
+        self.kalman_filter.P *= 1.0
         
         # Process Uncertainty
         self.kalman_filter.Q = np.array([[1, 1, 0, 0],
                                          [1, 1, 0, 0],
                                          [0, 0, 1, 1],
-                                         [0, 0, 1, 1]])
+                                         [0, 0, 1, 1]]) * 0.01
         
         # Measurement Uncertainty
         self.kalman_filter.R = np.array([[1, 0],
                                          [0, 1]]) * 0.5
-
     def continuous_tracking(self):
         while True:
             start_time = time.time()
@@ -238,7 +240,7 @@ class LidarScanner:
         for label, cluster_data in clusters.items():
             if label == -1:
                 continue
-
+            
             distance = calculate_distance(cluster_data['central_position'], (0, self.ACQUISITION_DISTANCE))
 
             if distance < self.ACQUISITION_RADIUS:
@@ -249,34 +251,29 @@ class LidarScanner:
                 break
 
     def perform_tracking(self, clusters):
+        # TODO check mahalanobis distance of points to previous *n* tracks, 
+        # n = 3 as standard
+
         # make a prediction for the next position
         self.kalman_filter.predict()
         current_prediction = np.array([self.kalman_filter.x[0], self.kalman_filter.x[2]])
+        
+        # extract position parts of the covariance matrix Σ
+        covariance_matrix = self.kalman_filter.P[np.ix_([0, 2], [0, 2])]
 
-        # extract position parts of the covariance matrix Σ FIXME
-        covariance_matrix = self.kalman_filter.P[np.ix_([0, 1, 2, 3], [0, 1, 2, 3])]
+        np.set_printoptions(threshold=np.inf)
+        print(covariance_matrix)
         
         for label, cluster_data in clusters.items():
             # skip noise
             if label == -1:
                 continue
-
-            # set Mahalanobis distance for each cluster
-            # TODO: implement velocity by calculating velocity from last track to current position\
-            # FIXME 
-
-            velocity = current_prediction - np.array([cluster_data['central_position'][1] * np.cos(cluster_data['central_position'][0]),
-                                                      cluster_data['central_position'][1] * np.sin(cluster_data['central_position'][0])])
             
-            predicted_velocity = np.array([self.kalman_filter.x[1], self.kalman_filter.x[3]])
-
-            # print(f"current: {np.round(velocity, decimals=3)} \npredicted: {np.round(predicted_velocity, decimals=3)}")
-
-            object_state = np.array([cluster_data['central_position'], velocity]).flatten()
-            predicted_state = np.array([current_prediction, predicted_velocity]).flatten()
-
-            cluster_data['mahalanobis_distance'] = np.round(mahalanobis_distance(object_state,
-                                                                                 predicted_state, covariance_matrix), decimals=3)
+            # set Mahalanobis distance for each cluster | FIXME: cluster_data['central_position'] are POLAR that's WRONG. 
+            cluster_data['mahalanobis_distance'] = np.round(
+                mahalanobis_distance(cartesian(*cluster_data['central_position']), current_prediction, covariance_matrix),
+                decimals=3
+                )
         
         # converting prediction to polar coordinates
         current_prediction_polar = np.array([np.arctan2(current_prediction[1], current_prediction[0]), np.sqrt(current_prediction[0]**2 + current_prediction[1]**2)])
@@ -291,8 +288,6 @@ class LidarScanner:
         closest_cluster_label = min(filtered_keys, key=lambda k: clusters[k]['mahalanobis_distance'], default=None)
 
         if closest_cluster_label:
-            print(current_prediction_polar)
-
             # set tracked position
             self.tracked_point = clusters[closest_cluster_label]['central_position']
             self.last_track = time.time()
