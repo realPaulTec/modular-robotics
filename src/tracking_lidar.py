@@ -9,6 +9,26 @@ import numpy as np
 from sklearn.cluster import DBSCAN
 from filterpy.kalman import KalmanFilter
 
+# Scanning the environment with LiDAR, 720 samples is the minimum to provide a clear picture, this is the most resource intensive step, taking 0.1 seconds.
+# Clustering the points using DBSCAN and finding the polar center of each cluster using Euler's formula.
+# Tracking:
+# NOTE Tracking is initialized, by a cluster moving inside the yellow circle, which has a fixed position in front of the LiDAR 
+# The first step is to make a prediction for9 the next position of the cluster we want to track, which I'll refer to as trk-cluster, using a Kalman filter
+# Then the Mahalanaobis distance to the predicted point is calculated from each cluster center
+# NOTE: The Mahlanobis distance, is the distance corrected for the covariance of the x and y coordinates of the predicted position, it is provided by the Kalman filter
+# The cluster with the lowest Mahalanobis distance to the prediction is most likeley the trk-cluster for the next frame
+# Additionally the euclidian distance to the last know position of the trk-cluster (MAX_TRACK_RUNAWAY) and to the position of the prediction (MAX_TRACK_DEVIATION), is used for additional control
+# If a new cluster isn't found, the Kalman filter continues to predict the position for the duration of (MAX_TRACK_LIFETIME)
+# If the trk-cluster is not found within MAX_TRACK_LIFETIME, the tracking is aborted.
+# In the UI, the trk-cluster is indicated by a green X
+
+# Clusters on the polar grid have different colors
+# The central positions of all clusters are indicated by stars
+# The Mahalanobis distance to the predicted position is indicated as a label
+# The vector to the predicted position, usually to small to notice, is indicated by a red arrow
+
+# TODO: Incorporate the cluster bounds for another anchor of identifying the trk-cluster
+
 def calculate_mean_angle(angles):
     # Euler's formula: e^(iθ)=cos(θ)+i*sin(θ)
 
@@ -55,7 +75,7 @@ def cartesian(theta, rho):
 
 class LidarScanner:
     # scanning constants
-    MAX_DISTANCE_METERS = 5
+    MAX_DISTANCE_METERS = 4
     SAMPLE_RATE = 720
     SCAN_MODE = 2
     MOTOR_SPEED = 600
@@ -69,9 +89,9 @@ class LidarScanner:
     DBSCAN_MIN_SAMPLES = 8
 
     # tracking constants
-    MAX_TRACK_DEVIATION = 1.0
+    MAX_TRACK_DEVIATION = 0.4
     MAX_TRACK_LIFETIME = 2.0
-    MAX_TRACK_RUNAWAY = 0.4
+    MAX_TRACK_RUNAWAY = 2.0
 
     def __init__(self):
         # lidar and plotting setup
@@ -298,7 +318,7 @@ class LidarScanner:
             if count == (self.SAMPLE_RATE - 1):
                 # Filter out zeros
                 valid_indices = np.nonzero(distance)
-                return np.array(list(zip(angle[valid_indices], distance[valid_indices])))
+                return np.array(list(zip(-angle[valid_indices], distance[valid_indices])))
      
     def graphing(self):
         with self.cluster_lock:
