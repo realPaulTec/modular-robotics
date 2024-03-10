@@ -177,7 +177,7 @@ class MotorInterface:
         t1 = time.time()
         rot_A, rot_B = self.driver.hall_feedback(scan_complete)
 
-        print(f"{rot_A} | {rot_B} | {round(time.time()-t1, 3)}")
+        # print(f"{rot_A} | {rot_B} | {round(time.time()-t1, 3)}")
 
         # Calculate the circumference of the wheel
         wheel_circumference = 2 * math.pi * self.wheel_radius

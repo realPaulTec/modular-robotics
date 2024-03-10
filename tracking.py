@@ -72,7 +72,7 @@ class Tracking:
         self.kalman_filter.R = np.array([[1, 0],
                                          [0, 1]]) * 0.5
 
-    def track_cycle(self, hall_queue=None, stop_feedback=None):
+    def track_cycle(self, hall_thread=None, hall_queue=None, stop_feedback=None):
         # Get initial start time
         initial_time = time.time()
 
@@ -84,11 +84,18 @@ class Tracking:
         # Restart the loop when distance and angle are empty
         if not coordinates.any():
             self.clusters.clear()
+
+            if hall_thread:
+                # Stop HALL readings and join thread 
+                stop_feedback.set()
+                hall_thread.join()
+                hall_queue.get()
+
             return
 
         # Offset coordinates for vehicle displacement
         start_time = time.time()
-        coordinates = self.offset_coordinates(coordinates, hall_queue, stop_feedback)
+        coordinates = self.offset_coordinates(coordinates, hall_thread, hall_queue, stop_feedback)
         
         # Perform DBSCAN clustering and returning labels
         labels = self.clustering(coordinates)
@@ -153,17 +160,19 @@ class Tracking:
         # print(f'Full: {round(time.time() - initial_time, 4)}')
         # print(f"Tracking: {self.tracked_point}")
 
-    def offset_coordinates(self, coordinates, hall_queue, stop_feedback):
+    def offset_coordinates(self, coordinates, hall_thread, hall_queue, stop_feedback):
         # Offset coordinates and read HALL data from queue
-        if hall_queue:
+        if hall_thread:
             # Stop HALL readings 
             stop_feedback.set()
             
             # Get information from HALL queue
+            hall_thread.join()
             linear_displacement, angular_displacement = hall_queue.get()
 
             # Offset cluster coordinates
-            coordinates = utils.offset_polar_coordinates(coordinates, linear_displacement / 1000, 180 + (angular_displacement / 1000))
+            print(f"\r\033[K {round(linear_displacement, 3)} | {round(angular_displacement)}", end="")
+            coordinates = utils.offset_polar_coordinates(coordinates, -linear_displacement, (180 + 2 * angular_displacement) % 360)
         else:
             # Offset cluster coordinates
             coordinates = utils.offset_polar_coordinates(coordinates, 0, 180)

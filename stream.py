@@ -38,9 +38,8 @@ def streamer(tracking):
         # Send data to desktop
         try:
             send_data(tracking_data)
-            print("sent")
         except Exception as e:
             print(e)
 
         # Sleep to avoid overwhealming network
-        time.sleep(1)
+        time.sleep(0.4)

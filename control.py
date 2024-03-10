@@ -53,16 +53,9 @@ while True:
         hall_thread.start() 
 
         # Tracking system cycle
-        tracking.track_cycle() #hall_queue=results_queue)
+        tracking.track_cycle(hall_thread=hall_thread, hall_queue=results_queue, stop_feedback=stop_feedback)
 
-        # Stop the thread
-        stop_feedback.set()
-        
-        # Waiting for thread to finish and getting information
-        hall_thread.join()
-        linear_displacement, angular_displacement = results_queue.get()
-        
-        # Clear threading event
+        # Clear stop feedback signal
         stop_feedback.clear()
 
         # Getting the direction in degrees and distance to person
@@ -99,8 +92,6 @@ while True:
             pwm_A = -100
             pwm_B = -100
 
-        # print(f"\r\033[K {pwm_A} | {pwm_B} | {round(tracking.tracked_point[0], 3), round(math.degrees(tracking.tracked_point[1]), 3)} | {round(linear_displacement, 3)} / {round(angular_displacement, 3)}    ", end="")
-    
         interface.control(-pwm_A, -pwm_B)
    
     # Exiting program after keyboardinterrupt
