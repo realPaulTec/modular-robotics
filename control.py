@@ -7,6 +7,7 @@ from threading import Thread
 import time
 import os
 import sys
+import stream
 
 # sudo /home/paultec/archiconda3/bin/python3 tracking_interface.py
 
@@ -32,6 +33,11 @@ thresh_meters = 0.05
 
 # Generating new motor interface class based on motor driver
 interface = MotorInterface(driver, wheel_radius, wheelbase)
+
+# Streamer thread
+streamer = threading.Thread(target=stream.streamer, args=(tracking,))
+streamer.daemon = True
+streamer.start()
 
 while True:
     try: 

@@ -1,4 +1,6 @@
 import numpy as np
+import ot
+from scipy.linalg import sqrtm
 
 # Conversion formulas
 polar_to_cartesian = lambda r, theta: (r * np.cos(theta), r * np.sin(theta))
@@ -88,3 +90,36 @@ def offset_polar_coordinates(coordinates, linear_displacement, angular_displacem
     displaced_coordinates = np.stack((radii_displaced, angles_displaced), axis=-1)
 
     return displaced_coordinates
+
+# Calculate mean and covariance from 2D point cloud
+def mean_and_covariance(data):
+    mean_vector = np.mean(data, axis=0)
+    covariance_matrix = np.cov(data, rowvar=False)
+    return mean_vector, covariance_matrix
+
+# Calculate Bhattacharyya distance metric
+def bhattacharyya_distance(mean1, cov1, mean2, cov2):
+    mean_diff = mean2 - mean1
+    cov_mean = (cov1 + cov2) / 2
+    term1 = 1/8 * np.dot(np.dot(mean_diff.T, np.linalg.inv(cov_mean)), mean_diff)
+    term2 = 1/2 * np.log(np.linalg.det(cov_mean) / np.sqrt(np.linalg.det(cov1) * np.linalg.det(cov2)))
+    distance = term1 + term2
+    return distance
+
+# Calculate Wasserstein distance metric for 2D distributions
+def calculate_wasserstein_distance(X, Y):
+    # Number of samples in each distribution
+    n_samples_X = X.shape[0]
+    n_samples_Y = Y.shape[0]
+
+    # Uniform distribution for each set of points
+    a = np.ones((n_samples_X,)) / n_samples_X
+    b = np.ones((n_samples_Y,)) / n_samples_Y
+
+    # Cost matrix: Euclidean distance between points
+    M = ot.dist(X, Y, metric='euclidean')
+
+    # Calculate the Wasserstein distance
+    distance = ot.emd2(a, b, M)
+    
+    return distance

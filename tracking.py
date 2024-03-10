@@ -1,3 +1,5 @@
+import os
+import sys
 import numpy as np
 import time
 from collections import defaultdict
@@ -7,7 +9,7 @@ from filterpy.kalman import KalmanFilter
 import utils
 from user_interface import UserInterface
 from lidar import Lidar
-import math
+import stream
 
 class Tracking:
     # scanning constants
@@ -262,13 +264,39 @@ if __name__ == "__main__":
         tracking_thread.daemon = True
         tracking_thread.start()
 
-        # UI setup and loop
-        UI = UserInterface(tracking.MAX_DISTANCE_METERS, tracking.MAX_TRACK_DEVIATION, tracking.ACQUISITION_RADIUS, tracking.ACQUISITION_DISTANCE)
-        
+        # Socket UI
         while True:
-            UI.update_clusters(tracking.tracking, tracking.tracked_point, tracking.prediction, tracking.clusters)
-            terminate = UI.graphing()
+            try:
+                # Prepare data to send
+                tracking_data = stream.convert_for_sending(tracking)
+                
+                # Send data to desktop
+                try:
+                    stream.send_data(tracking_data)
+                    print("sent")
+                except Exception as e:
+                    print(e)
+
+                # Sleep to avoid overwhealming network
+                time.sleep(1)
             
-            # Break if exiting Matplotlib
-            if terminate == True:
-                break
+            except KeyboardInterrupt:
+                print('\nTerminating ...')
+                sys.stderr = open(os.devnull, 'w')
+                
+                # Trigger exit handlers for GPIO and LiDAR
+                tracking.lidar.exit_handler()
+                
+                # Exit program
+                os._exit(0)
+
+        # # UI setup and loop
+        # UI = UserInterface(tracking.MAX_DISTANCE_METERS, tracking.MAX_TRACK_DEVIATION, tracking.ACQUISITION_RADIUS, tracking.ACQUISITION_DISTANCE)
+        
+        # while True:
+        #     UI.update_clusters(tracking.tracking, tracking.tracked_point, tracking.prediction, tracking.clusters)
+        #     terminate = UI.graphing()
+            
+        #     # Break if exiting Matplotlib
+        #     if terminate == True:
+        #         break
