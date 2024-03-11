@@ -7,14 +7,13 @@ import threading
 from sklearn.cluster import DBSCAN
 from filterpy.kalman import KalmanFilter
 import utils
-from user_interface import UserInterface
 from lidar import Lidar
 import stream
 
 class Tracking:
     # scanning constants
     MAX_DISTANCE_METERS = 2.5
-    SAMPLE_RATE = 720*2 #441
+    SAMPLE_RATE = 720 * 2 #441
 
     # acquisition constants
     ACQUISITION_DISTANCE = 0.5
@@ -44,33 +43,39 @@ class Tracking:
         self.last_track = time.time()
 
     def setup_kalman(self):
-        self.kalman_filter = KalmanFilter(dim_x=4, dim_z=2)
+        self.kalman_filter = KalmanFilter(dim_x=7, dim_z=5)
         
-        # Initial State [x_position, x_velocity, y_position, y_velocity]
-        self.kalman_filter.x = np.array([self.ACQUISITION_DISTANCE, 0., 0., 0.])
+        # Initial State [x_position, x_velocity, y_position, y_velocity, var(x), var(y)]
+        self.kalman_filter.x = np.array([self.ACQUISITION_DISTANCE, 0., 0., 0., 1., 1., 0.])
         
         # State Transition Matrix
-        self.kalman_filter.F = np.array([[1, 1, 0, 0],
-                                         [0, 1, 0, 0],
-                                         [0, 0, 1, 1],
-                                         [0, 0, 0, 1]])
-        
+        self.kalman_filter.F = np.array([
+            [1, 1, 0, 0, 0, 0, 0],
+            [0, 1, 0, 0, 0, 0, 0],
+            [0, 0, 1, 1, 0, 0, 0],
+            [0, 0, 0, 1, 0, 0, 0],
+            [0, 0, 0, 0, 1, 0, 0],
+            [0, 0, 0, 0, 0, 1, 0],
+            [0, 0, 0, 0, 0, 0, 1]
+        ])
+
         # Measurement Matrix
-        self.kalman_filter.H = np.array([[1, 0, 0, 0],
-                                         [0, 0, 1, 0]])
+        self.kalman_filter.H = np.array([
+            [1, 0, 0, 0, 0, 0, 0],  # x position
+            [0, 0, 1, 0, 0, 0, 0],  # y position
+            [0, 0, 0, 0, 1, 0, 0],  # var(x)
+            [0, 0, 0, 0, 0, 1, 0],  # var(y)
+            [0, 0, 0, 0, 0, 0, 1]   # cov(x,y)
+        ])
         
         # Initial Uncertainty
         self.kalman_filter.P *= 1.0
         
         # Process Uncertainty
-        self.kalman_filter.Q = np.array([[1, 1, 0, 0],
-                                         [1, 1, 0, 0],
-                                         [0, 0, 1, 1],
-                                         [0, 0, 1, 1]]) * 0.01
+        self.kalman_filter.Q = np.eye(7) * 0.01  # Adjusted for simplicity, but you should customize this
         
         # Measurement Uncertainty
-        self.kalman_filter.R = np.array([[1, 0],
-                                         [0, 1]]) * 0.5
+        self.kalman_filter.R = np.eye(5) * 0.5
 
     def track_cycle(self, hall_thread=None, hall_queue=None, stop_feedback=None):
         # Get initial start time
@@ -84,13 +89,6 @@ class Tracking:
         # Restart the loop when distance and angle are empty
         if not coordinates.any():
             self.clusters.clear()
-
-            if hall_thread:
-                # Stop HALL readings and join thread 
-                stop_feedback.set()
-                hall_thread.join()
-                hall_queue.get()
-
             return
 
         # Offset coordinates for vehicle displacement
@@ -109,6 +107,9 @@ class Tracking:
         # Pass clusters to user interface
         self.clusters = clusters
 
+        # Compute covariance matrices for clusters 
+        clusters = self.compute_covariance(clusters)
+
         # Acquire object if not tracking
         if self.tracking == False:
             # print(f'Full: {round(time.time() - initial_time, 4)}')
@@ -116,15 +117,26 @@ class Tracking:
             return
 
         start_time = time.time()
-        # Make a Kalman filter prediction for the next position
-        self.kalman_filter.predict()
-        current_prediction = np.array([self.kalman_filter.x[0], self.kalman_filter.x[2]])
-        
-        # Extract position parts of the covariance matrix Σ
+        # Assuming self.kalman_filter.x[4] = var(x), self.kalman_filter.x[5] = var(y), self.kalman_filter.x[6] = cov(x,y)
+
+        # Extracting the covariance matrix for the cluster
+        cluster_covariance = np.array([
+            [self.kalman_filter.x[4], self.kalman_filter.x[6]],
+            [self.kalman_filter.x[6], self.kalman_filter.x[5]]
+        ])
+
+        current_prediction = np.array([
+            self.kalman_filter.x[0],  # x position
+            self.kalman_filter.x[2]   # y position
+        ])
+
+        # Extract the covariance matrix Σ for the position parts from the Kalman filter's error covariance matrix P
         covariance_matrix = self.kalman_filter.P[np.ix_([0, 2], [0, 2])]
-        
+
         # Compute Mahalanobis distance for each cluster
+        clusters = self.compute_bhattacharyya(clusters, current_prediction, cluster_covariance)
         clusters = self.compute_mahalanobis(clusters, current_prediction, covariance_matrix)
+        clusters = self.compute_mb_metric(clusters)
         
         # Converting prediction to polar coordinates
         current_prediction_polar = utils.cartesian_to_polar(*current_prediction)
@@ -136,16 +148,25 @@ class Tracking:
                          ]
         
         # Find cluster with lowest Mahalanobis distance
-        closest_cluster_label = min(filtered_keys, key=lambda k: clusters[k]['mahalanobis_distance'], default=None)
+        metric = 'bhattacharyya_distance' # 'mb_metric' 
+        closest_cluster_label = min(filtered_keys, key=lambda k: clusters[k][metric], default=None)
         
         if closest_cluster_label:
             # Set tracked position
             self.tracked_point = clusters[closest_cluster_label]['central_position']
             self.last_track = time.time()
 
+            print(f"CL mean: {np.round(clusters[closest_cluster_label]['mean_vector'], 3)} covar: {np.round(clusters[closest_cluster_label]['covariance'], 3)}")
+            print(f"KF mean: {np.round(current_prediction, 3)} covar: {np.round(covariance_matrix, 3)}")
+
             # Update Kalman filter
-            self.kalman_filter.update(utils.polar_to_cartesian(*self.tracked_point))
-        
+            self.kalman_filter.update(np.array([
+                *clusters[closest_cluster_label]['mean_vector'],
+                clusters[closest_cluster_label]['covariance'][0][0],
+                clusters[closest_cluster_label]['covariance'][1][1],
+                clusters[closest_cluster_label]['covariance'][0][1]
+            ]))
+
         elif (self.last_track + self.MAX_TRACK_LIFETIME) < time.time():
             # Reset lost track after lifetime exceeded
             self.tracked_point = []
@@ -153,12 +174,7 @@ class Tracking:
         
         # Pass prediction to user interface for drawing arrow
         self.kalman_filter.predict()
-        self.prediction = self.kalman_filter.x[0], self.kalman_filter.x[2]   
-        
-        # print(f'TP: {round(self.tracked_point[0], 3)}, {round(math.degrees(self.tracked_point[1]), 3)}')
-        # print(f'Tracking: {round(time.time() - start_time, 4)}')
-        # print(f'Full: {round(time.time() - initial_time, 4)}')
-        # print(f"Tracking: {self.tracked_point}")
+        self.prediction = self.kalman_filter.x[0], self.kalman_filter.x[2]
 
     def offset_coordinates(self, coordinates, hall_thread, hall_queue, stop_feedback):
         # Offset coordinates and read HALL data from queue
@@ -172,7 +188,7 @@ class Tracking:
 
             # Offset cluster coordinates
             print(f"\r\033[K {round(linear_displacement, 3)} | {round(angular_displacement)}", end="")
-            coordinates = utils.offset_polar_coordinates(coordinates, -linear_displacement, (180 + 2 * angular_displacement) % 360)
+            coordinates = utils.offset_polar_coordinates(coordinates, -linear_displacement, 180) # TODO implement angular_displacement
         else:
             # Offset cluster coordinates
             coordinates = utils.offset_polar_coordinates(coordinates, 0, 180)
@@ -196,12 +212,17 @@ class Tracking:
             'points_cartesian' : [],
             'count': 0,
             'central_position': (0, 0),
-            'mahalanobis_distance': 0
+            'mean_vector' : (0, 0),
+            'covariance' : [[0, 0], [0, 0]],
+            'mahalanobis_distance': 0,
+            'bhattacharyya_distance': 0,
+            'mb_metric' : 0
         })
         
         for i, label in enumerate(labels):
             # Add points to cluster dictionary
             clusters[label]['points'].append(coordinates[i])
+            clusters[label]['points_cartesian'].append(utils.polar_to_cartesian(*coordinates[i]))
             
             # Updating running totals for distance
             clusters[label]['count'] += 1
@@ -227,8 +248,7 @@ class Tracking:
     def acquisition(self, clusters):
         for label, cluster_data in clusters.items():
             # Skip noise
-            if label == -1:
-                continue
+            if label == -1: continue
             
             # Checking if any cluster is within the acquisition circle
             distance = utils.distance_polar(cluster_data['central_position'], (self.ACQUISITION_DISTANCE, self.ACQUISITION_ANGLE))
@@ -236,26 +256,64 @@ class Tracking:
             if distance < self.ACQUISITION_RADIUS:
                 # Setting tracked point to acquired cluster
                 self.tracked_point = cluster_data['central_position']
-                
+
                 # Update Kalman filter
-                self.kalman_filter.update(utils.polar_to_cartesian(*self.tracked_point))
+                self.kalman_filter.update(np.array([
+                    *cluster_data['mean_vector'],
+                    cluster_data['covariance'][0][0],
+                    cluster_data['covariance'][1][1],
+                    cluster_data['covariance'][0][1]
+                ]))
                 
                 # Updating tracking status and last track time
                 self.tracking = True
                 self.last_track = time.time()
                 break
 
+    def compute_covariance(self, clusters):
+        for label, cluster_data in clusters.items():
+            # Skip noise
+            if label == -1: continue
+
+            # Set Mahalanobis distance for each cluster 
+            cluster_data['mean_vector'], cluster_data['covariance'] = utils.mean_and_covariance(cluster_data['points_cartesian'])
+        
+        return clusters
+
+    def compute_bhattacharyya(self, clusters, current_prediction, covariance_matrix):
+        for label, cluster_data in clusters.items():
+            # Skip noise
+            if label == -1: continue
+
+            # Set Mahalanobis distance for each cluster 
+            cluster_data['bhattacharyya_distance'] = np.round(
+                utils.bhattacharyya_distance(cluster_data['mean_vector'], cluster_data['covariance'], current_prediction, covariance_matrix),
+                decimals=3
+                )
+        
+        return clusters
+
     def compute_mahalanobis(self, clusters, current_prediction, covariance_matrix):
         for label, cluster_data in clusters.items():
             # Skip noise
-            if label == -1:
-                continue
-
+            if label == -1: continue
+            
             # Set Mahalanobis distance for each cluster 
             cluster_data['mahalanobis_distance'] = np.round(
-                utils.mahalanobis_distance(utils.polar_to_cartesian(*cluster_data['central_position']), current_prediction, covariance_matrix),
+                utils.mahalanobis_distance(cluster_data['mean_vector'], current_prediction, covariance_matrix),
                 decimals=3
                 )
+            # Set MB metru distance for each cluster 
+            
+        return clusters
+
+    def compute_mb_metric(self, clusters):
+        for label, cluster_data in clusters.items():
+            # Skip noise
+            if label == -1: continue
+
+            # Set MB metric
+            cluster_data['mb_metric'] = cluster_data['mahalanobis_distance'] * cluster_data['bhattacharyya_distance']
         
         return clusters
 
@@ -282,7 +340,6 @@ if __name__ == "__main__":
                 # Send data to desktop
                 try:
                     stream.send_data(tracking_data)
-                    print("sent")
                 except Exception as e:
                     print(e)
 
@@ -298,14 +355,3 @@ if __name__ == "__main__":
                 
                 # Exit program
                 os._exit(0)
-
-        # # UI setup and loop
-        # UI = UserInterface(tracking.MAX_DISTANCE_METERS, tracking.MAX_TRACK_DEVIATION, tracking.ACQUISITION_RADIUS, tracking.ACQUISITION_DISTANCE)
-        
-        # while True:
-        #     UI.update_clusters(tracking.tracking, tracking.tracked_point, tracking.prediction, tracking.clusters)
-        #     terminate = UI.graphing()
-            
-        #     # Break if exiting Matplotlib
-        #     if terminate == True:
-        #         break

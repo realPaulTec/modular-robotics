@@ -53,27 +53,29 @@ def terminate():
     # Exit program
     os._exit(0)
 
+def start_hall():
+    # Create queue for results
+    results_queue = Queue()
+
+    # Get offset for tracking 
+    hall_thread = Thread(target=interface.get_tracking_offset, args=(results_queue, stop_feedback,))
+    hall_thread.deamon = True
+    hall_thread.start()
+
+    return hall_thread, results_queue
+
 while True:
     try: 
-        if stop_control.is_set():
-            terminate()
+        if stop_control.is_set():   terminate()
 
         # Get initial time
         time_1 = time.time()
 
-        # Create queue for results
-        results_queue = Queue()
-
-        # Get offset for tracking 
-        hall_thread = Thread(target=interface.get_tracking_offset, args=(results_queue, stop_feedback,))
-        hall_thread.deamon = True
-        hall_thread.start() 
-
         # Tracking system cycle
-        tracking.track_cycle(hall_thread=hall_thread, hall_queue=results_queue, stop_feedback=stop_feedback)
+        tracking.track_cycle() #hall_thread=hall_thread, hall_queue=results_queue, stop_feedback=stop_feedback)
 
-        # Clear stop feedback signal
-        stop_feedback.clear()
+        # # Clear stop feedback signal
+        # stop_feedback.clear()
 
         # Getting the direction in degrees and distance to person
         if tracking.tracked_point:

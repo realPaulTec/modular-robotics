@@ -3,6 +3,8 @@ import pickle
 import struct
 import time
 
+# LAPTOP '192.168.53.62' 
+# DESKTOP '192.168.53.232'
 HOST = '192.168.53.232'
 PORT = 65432
 
