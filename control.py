@@ -34,13 +34,30 @@ thresh_meters = 0.05
 # Generating new motor interface class based on motor driver
 interface = MotorInterface(driver, wheel_radius, wheelbase)
 
+# Stop tracking event
+stop_control = threading.Event()
+
 # Streamer thread
-streamer = threading.Thread(target=stream.streamer, args=(tracking,))
+streamer = threading.Thread(target=stream.streamer, args=(tracking, stop_control,))
 streamer.daemon = True
 streamer.start()
 
+def terminate():
+    print('\nTerminating ...')
+    sys.stderr = open(os.devnull, 'w')
+    
+    # Trigger exit handlers for GPIO and LiDAR
+    tracking.lidar.exit_handler()
+    driver.exit_handler()
+    
+    # Exit program
+    os._exit(0)
+
 while True:
     try: 
+        if stop_control.is_set():
+            terminate()
+
         # Get initial time
         time_1 = time.time()
 
@@ -96,12 +113,4 @@ while True:
    
     # Exiting program after keyboardinterrupt
     except KeyboardInterrupt:
-        print('\nTerminating ...')
-        sys.stderr = open(os.devnull, 'w')
-        
-        # Trigger exit handlers for GPIO and LiDAR
-        tracking.lidar.exit_handler()
-        driver.exit_handler()
-        
-        # Exit program
-        os._exit(0)
+        terminate()

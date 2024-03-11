@@ -30,7 +30,7 @@ def convert_for_sending(tracking):
 
     return tracking_data
 
-def streamer(tracking):
+def streamer(tracking, stop_control):
     while True:
         # Prepare data to send
         tracking_data = convert_for_sending(tracking)
@@ -39,7 +39,8 @@ def streamer(tracking):
         try:
             send_data(tracking_data)
         except Exception as e:
-            print(e)
+            print(f'\nERROR {e}')
+            stop_control.set()
 
         # Sleep to avoid overwhealming network
-        time.sleep(0.4)
+        time.sleep(0.2)
