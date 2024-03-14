@@ -2,6 +2,8 @@ import math
 import Jetson.GPIO as GPIO
 import atexit
 import time
+import numpy as np
+import smbus
 
 class MotorDriver:
     def __init__(self, ENA, IN1, IN2, ENB, IN3, IN4, HALL_A1, HALL_A2, HALL_B1, HALL_B2):
@@ -196,4 +198,123 @@ class MotorInterface:
 
         # Put results in queue
         results_queue.put(( total_distance, angular_change_deg))
+
+class GyroInterface:
+    def __init__(self, motor_interface, bus=1, address=0x68, mag_address=0x0C):
+        # Interface with MPU9250
+        self.motor_interface = motor_interface
+        self.bus = smbus.SMBus(bus)
+        self.address = address
+        self.mag_address = mag_address
+
+        # Setup offsets and scale factors for calibration
+        self.offsets = np.zeros(3)
+        self.scale_factors = np.zeros(3)
+
+        # Enable bypass mode to access magnetometer
+        self.bus.write_byte_data(self.address, 0x37, 0x02)
+        
+        # Set magnetometer to continuous measurement mode
+        self.bus.write_byte_data(self.mag_address, 0x0A, 0x16)
+        
+        # Short delay
+        time.sleep(0.1)
+
+    def calibrate(self, angular_threshold=5, sample_rate=100, sample_threshold=60):
+        print("Calibrating... Ensure the robot moves in a circle.")
+
+        # Start moving in a circle
+        self.motor_interface.control(-100, 100)
+
+        initial_readings = self.read_mag_data()
+        initial_heading = round(self.calculate_heading(initial_readings))
+        readings = [initial_readings]
+
+        samples = 0
+        while True:
+            samples += 1
+            
+            # Stop motor for readings
+            self.motor_interface.control(0,0)
+            
+            current_readings = []
+            current_headings = []
+            for i in range(sample_rate):
+                # Get readings and heading
+                data = np.array(self.read_mag_data())
+                
+                # Update headings and readings
+                current_readings.append(data)
+                current_headings.append(round(self.calculate_heading(data)))
+                
+                # Delay for sensor
+                time.sleep(0.001)
+
+            self.motor_interface.control(-100, 100)
+
+            # Get mean of current readings and headings
+            current_reading = np.median(np.array(current_readings), axis=0)
+            current_heading = np.median(current_headings)
+            
+            # Update headings for calibration
+            readings.append(current_reading)
+
+            # The robot turns ~64 times, with 5,625 degrees 
+            time.sleep(0.1)
+
+            print(current_heading)
+
+            # Break if the robot turned in a circle once 
+            if np.abs(current_heading - initial_heading) < angular_threshold and samples > sample_threshold:
+                self.motor_interface.control(0, 0)
+                break
+
+        # Convert to numpy array for easier manipulation
+        hall_array = np.array(readings)
+
+        # Normalize
+        hall_mean = np.mean(hall_array, axis=0)
+        hall_std = np.std(hall_array, axis=0)
+
+        normalized_hall = (hall_array - hall_mean) / hall_std
+        
+        # Find min and max for each axis
+        min_vals = np.min(normalized_hall, axis=0)
+        max_vals = np.max(normalized_hall, axis=0)
+
+        # Calculate offsets
+        self.offsets = (max_vals + min_vals) / 2
+
+        # Calculate scale factors
+        self.scale_factors = 2 / (max_vals - min_vals)
+
+        print(f"Calibration complete... I{initial_heading} E{current_heading}")
+
+    def read_mag_data(self):
+        # Read magnetometer data
+        data = self.bus.read_i2c_block_data(self.mag_address, 0x03, 7)
+        x = data[0] * 256 + data[1]
+        if x > 32767:
+            x -= 65536
+        y = data[2] * 256 + data[3]
+        if y > 32767:
+            y -= 65536
+        z = data[4] * 256 + data[5]
+        if z > 32767:
+            z -= 65536
+        return np.array([x, y, z])
+
+    def calculate_heading(self, hall_reading):
+        return math.degrees(math.atan2(hall_reading[1], hall_reading[0])) % 360
     
+    def get_calibrated_heading(self, samples=20):
+        readings = []
+        for i in range(samples):
+            readings.append(self.read_mag_data())
+
+        data = np.median(np.array(readings), axis=0)
+
+        return self.calculate_heading(self.apply_calibration(data))
+
+    def apply_calibration(self, hall_reading):
+        return (hall_reading - self.offsets) * self.scale_factors

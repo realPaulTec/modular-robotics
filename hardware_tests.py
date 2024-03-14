@@ -3,7 +3,7 @@ import os
 from queue import Queue
 import sys
 import time
-from drivers import MotorDriver, MotorInterface
+from drivers import MotorDriver, MotorInterface, GyroInterface
 from tracking import Tracking
 import threading
 
@@ -20,6 +20,16 @@ wheelbase = 0.45 # 17
 # Generating new motor interface class based on motor driver
 interface = MotorInterface(driver, wheel_radius, wheelbase)
 
+# # Generate a new interface for the MPU9250
+# gyroscope = GyroInterface(interface) 
+# gyroscope.calibrate()
+
+# # print(gyroscope.apply_calibration(*gyroscope.read_mag_data()))
+
+# while True:
+#     print(f"\r\033[K {round(gyroscope.get_calibrated_heading(samples=50))}", end="")
+#     time.sleep(0.1)
+
 while True:
     try:    
         pwm_1, pwm_2, stime = input("PWM1, PWM2, TIME: ").replace(" ", "").split(",")
@@ -32,10 +42,15 @@ while True:
         hall_thread.deamon = True
         hall_thread.start()
 
+        initial_time = time.time()
+
         # Interface with the motors
         interface.control(-int(pwm_1), -int(pwm_2))
 
         # Sleep for stime seconds
+        # while time.time() < initial_time + float(stime):
+        #     print(gyroscope.get_calibrated_heading())
+        #     time.sleep(0.1)
         time.sleep(float(stime))
 
         # Stop the motors

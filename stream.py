@@ -5,7 +5,7 @@ import time
 
 # LAPTOP '192.168.53.62' 
 # DESKTOP '192.168.53.232'
-HOST = '192.168.53.232'
+HOST = '192.168.46.232'
 PORT = 65432
 
 # Send tracking data to desktop
@@ -34,6 +34,9 @@ def convert_for_sending(tracking):
 
 def streamer(tracking, stop_control):
     while True:
+        # Sync data stream with tracking
+        tracking.send_data.wait()
+
         # Prepare data to send
         tracking_data = convert_for_sending(tracking)
         
@@ -44,5 +47,7 @@ def streamer(tracking, stop_control):
             print(f'\nERROR {e}')
             stop_control.set()
 
-        # Sleep to avoid overwhealming network
-        time.sleep(0.2)
+        # Clear send_data event
+        tracking.send_data.clear()
+        time.sleep(0.1)
+        

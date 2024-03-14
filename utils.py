@@ -1,6 +1,9 @@
 import numpy as np
 import ot
 from scipy.linalg import sqrtm
+from scipy.interpolate import interp1d
+from sklearn.kernel_approximation import svd
+from sklearn.neighbors import KDTree
 
 # Conversion formulas
 polar_to_cartesian = lambda r, theta: (r * np.cos(theta), r * np.sin(theta))
@@ -123,3 +126,41 @@ def calculate_wasserstein_distance(X, Y):
     distance = ot.emd2(a, b, M)
     
     return distance
+
+# Get estimated rotation and transformation
+def estimate_translation(arr1, arr2, max_points):
+    # Convert polar to Cartesian coordinates
+    A = [polar_to_cartesian(r, theta) for r, theta in arr1]
+    B = [polar_to_cartesian(r, theta) for r, theta in arr2]
+
+    # Center the points in A and B
+    centroid_A = np.mean(A, axis=0)
+    centroid_B = np.mean(B, axis=0)
+    A_centered = A - centroid_A
+    B_centered = B - centroid_B
+
+    # Build a KDTree for the larger set
+    if A_centered.shape[0] > B_centered.shape[0]:
+        tree = KDTree(A_centered)
+        distances, indices = tree.query(B_centered, k=1)
+        matched_A = A_centered[indices.squeeze(), :]
+        matched_B = B_centered
+    else:
+        tree = KDTree(B_centered)
+        distances, indices = tree.query(A_centered, k=1)
+        matched_A = A_centered
+        matched_B = B_centered[indices.squeeze(), :]
+
+    # Compute the cross-covariance matrix
+    H = np.dot(matched_A.T, matched_B)
+
+    # Perform SVD
+    U, S, Vt = svd(H)
+    R = np.dot(Vt.T, U.T)
+
+    # Ensure a proper rotation
+    if np.linalg.det(R) < 0:
+        Vt[1,:] *= -1
+        R = np.dot(Vt.T, U.T)
+
+    return R
