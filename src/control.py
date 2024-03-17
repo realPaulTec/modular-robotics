@@ -1,5 +1,5 @@
 import math
-from src.drivers import MotorDriver, MotorInterface
+from drivers import MotorDriver, MotorInterface
 import threading
 from tracking import Tracking
 from queue import Queue
@@ -10,6 +10,12 @@ import sys
 import stream
 
 # sudo /home/paultec/archiconda3/bin/python3 tracking_interface.py
+
+# Speech events & thread
+terminate_speech, engage, disengage, listen = threading.Event(), threading.Event(), threading.Event(), threading.Event()
+speech = threading.Thread(target=stream.receive_speech, args=(terminate_speech, engage, disengage, listen,))
+speech.daemon = True
+speech.start()
 
 # generating new MotorDriver class driver with motor pins
 driver = MotorDriver(33, 36, 35, 32, 38, 40, 12, 16, 18, 22)
@@ -42,6 +48,10 @@ streamer = threading.Thread(target=stream.streamer, args=(tracking, stop_control
 streamer.daemon = True
 streamer.start()
 
+def speech_client():
+    if engage.is_set()      : tracking.override = False
+    elif disengage.is_set() : tracking.override = True
+
 def terminate():
     print('\nTerminating ...')
     sys.stderr = open(os.devnull, 'w')
@@ -49,6 +59,10 @@ def terminate():
     # Trigger exit handlers for GPIO and LiDAR
     tracking.lidar.exit_handler()
     driver.exit_handler()
+
+    # Terminate speech
+    terminate_speech.set()
+    speech.join()
     
     # Exit program
     os._exit(0)
@@ -83,6 +97,9 @@ while True:
 
         # Get initial time
         time_1 = time.time()
+
+        # Run speech client
+        speech_client()
 
         # Tracking system cycle
         tracking.track_cycle() #hall_thread=hall_thread, hall_queue=results_queue, stop_feedback=stop_feedback)

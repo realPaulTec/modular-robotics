@@ -7,8 +7,10 @@ from pydub import AudioSegment
 import audioop
 import pvporcupine
 from openai import OpenAI
+import socket
 import zmq
 import os
+import sys
 
 # Get the full path of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -40,16 +42,26 @@ class AudioProcessing:
         self.latency = 'low'
         self.chunk_seconds = 2
 
+        # Setup socket communication
+        try:
+            self.setup_socket()
+        except:
+            sys.exit(0)
+
+    def setup_socket(self):
+        # Connecting socket
+        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.client_socket.connect(('localhost', 5000))
+
+        print('Connecting to server...')
+
     def transcribe(self, audio):
         # print(audioop.rms(audio.tobytes(), 2))
         wake_index = porcupine.process(audio)
 
-        if wake_index == 0:
-            print('Engage')
-        elif wake_index == 1:
-            print('Stop')
-        elif wake_index == 2:
-            print('listening')
+        if wake_index == 0      : self.client_socket.sendall('0'.encode())  # Engage
+        elif wake_index == 1    : self.client_socket.sendall('1'.encode())  # Stop
+        elif wake_index == 2    : self.client_socket.sendall('2'.encode())  # Listen
 
     def stream_callback(self, indata, frames, time, status, audio_queue):
         # Add this chunk of audio to the queue.
@@ -64,9 +76,6 @@ class AudioProcessing:
         self.transcribe(audio)
 
     def record_audio(self):
-        # Calculate block size
-        block_size = self.chunk_seconds * self.SAMPLE_RATE
-
         # Setup audio queue
         audio_queue = queue.Queue()
 
@@ -84,5 +93,10 @@ class AudioProcessing:
 
 if __name__ == '__main__':
     ap = AudioProcessing()
-    ap.record_audio()
-    porcupine.delete()
+
+    try:
+        ap.record_audio()
+    finally:
+        print('Closing speech...')
+        porcupine.delete()
+        ap.client_socket.close()

@@ -44,10 +44,41 @@ def streamer(tracking, stop_control):
         try:
             send_data(tracking_data)
         except Exception as e:
-            print(f'\nERROR {e}')
+            # print(f'\nERROR {e}')
             stop_control.set()
 
         # Clear send_data event
         tracking.send_data.clear()
         time.sleep(0.1)
-        
+
+def receive_speech(terminate_speech, engage, disengage, listen):
+    # Setting up server
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    server_socket.bind(('localhost', 5000))
+    server_socket.listen()
+
+    # Connecting to client
+    print("\nServer is waiting for a connection...")
+    client_socket, addr = server_socket.accept()
+    print(f"Connected to {addr}")
+
+    try:
+        while True:
+            try                 : data = int(client_socket.recv(1024).decode())
+            except Exception    : data = -1  
+
+            # State machine
+            if      data == 0   : engage.set(); disengage.clear(); print('ENGAGE')
+            elif    data == 1   : disengage.set(); engage.clear(); print('DISENGAGE')
+            elif    data == 2   : listen.set()
+
+            if terminate_speech.is_set(): break
+
+    finally:
+        print('Closing server...')
+
+        client_socket.close()
+        server_socket.close()
+
+if __name__ == '__main__':
+    receive_speech()

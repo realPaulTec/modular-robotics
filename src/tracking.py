@@ -86,7 +86,7 @@ class Tracking:
         self.clusters = clusters
 
         # Acquire object if not tracking or return on override
-        if      self.override == True   :  return
+        if      self.override == True   :  self.reset_tracking(); return
         elif    self.tracking == False  :  self.acquisition(clusters); return
         
         # Make a Kalman filter prediction for the next position
@@ -124,7 +124,7 @@ class Tracking:
         # If the closest Bhattacharyya from an old object which was NOT the target in the last cycle, now is the target that indicates a failiure 
         
         if closest_cluster_label: #and self.historical_crosscheck(clusters, closest_cluster_label):
-            print(clusters[closest_cluster_label]['bhattacharyya_distance'])
+            # print(clusters[closest_cluster_label]['bhattacharyya_distance'])
 
             # Set current clusters to historic
             self.hclosest_cluster_label = closest_cluster_label
@@ -141,19 +141,15 @@ class Tracking:
             self.kalman_filter.update(clusters[closest_cluster_label])
         
         elif not self.historical_crosscheck(clusters, closest_cluster_label):
-            # Reset lost track
-            self.tracked_point = []
-            self.tracking = False
-            self.first_track = True
+            # Reset tracking
+            self.reset_tracking()
 
             print('FAILIURE')
 
         elif (self.last_track + self.MAX_TRACK_LIFETIME) < time.time():
             # Reset lost track after lifetime exceeded
-            self.tracked_point = []
-            self.tracking = False
-            self.first_track = True
-        
+            self.reset_tracking()
+
         # Pass prediction to user interface for drawing arrow
         self.kalman_filter.predict()
         self.prediction = self.kalman_filter.get_current_prediction()
@@ -251,7 +247,7 @@ class Tracking:
             cluster_data['bhattacharyya_distance'] = np.round(
                 utils.bhattacharyya_distance(cluster_data['mean_vector'], cluster_data['covariance'], current_prediction, covariance_matrix),
                 decimals=3
-                )
+            )
 
         return clusters
 
@@ -265,7 +261,6 @@ class Tracking:
                 utils.mahalanobis_distance(cluster_data['mean_vector'], current_prediction, covariance_matrix),
                 decimals=3
                 )
-            # Set MB metru distance for each cluster 
             
         return clusters
 
@@ -294,6 +289,13 @@ class Tracking:
         
         # NOTE: There are usually two legs :/ But they do tend to have the same covariance...
         return True #closest_hcluster_key == self.hclosest_cluster_label or self.first_track
+
+    def reset_tracking(self):
+        # Reset lost track after lifetime exceeded
+        self.tracked_point = []
+        self.tracking = False
+        self.first_track = True
+        # self.kalman_filter = KalmanFilter(self.ACQUISITION_DISTANCE)
 
 if __name__ == "__main__":
     # Generating new tracking class
