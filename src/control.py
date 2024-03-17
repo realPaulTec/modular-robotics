@@ -102,10 +102,7 @@ while True:
         speech_client()
 
         # Tracking system cycle
-        tracking.track_cycle() #hall_thread=hall_thread, hall_queue=results_queue, stop_feedback=stop_feedback)
-
-        # # Clear stop feedback signal
-        # stop_feedback.clear()
+        tracking.track_cycle()
 
         # Getting the direction in degrees and distance to person
         if tracking.tracked_point:
@@ -114,8 +111,6 @@ while True:
             # Set PWM for both motors to Zero if not tracking
             pwm_A = 0
             pwm_B = 0
-
-            # print(f"\r\033[K {pwm_A} | {pwm_B} | NONE | NONE  ", end="")
 
             # Interface with the motors
             interface.control(pwm_A, pwm_B)

@@ -8,7 +8,7 @@ import threading
 import queue
 
 class Lidar:
-    SCAN_MODE = 3 # 3
+    SCAN_MODE = 2 # 3
     MOTOR_PWM = 800
 
     def __init__(self, SAMPLE_RATE, MAX_DISTANCE_METERS):
@@ -19,12 +19,10 @@ class Lidar:
         # Connecting to lidar hardware
         self.lidar = pyrplidar.PyRPlidar()
         self.lidar.connect(port="/dev/ttyUSB0", baudrate=115200, timeout=3)
-        print(f"samplerate: {self.lidar.get_samplerate()}")
         
         # Getting lidar status
         health = self.lidar.get_health()
         print(f"status: {health.status}, error code: {health.error_code}")
-        print()
 
         # Exit handler to disable lidar scanning and motor
         atexit.register(self.exit_handler)

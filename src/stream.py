@@ -65,11 +65,11 @@ def receive_speech(terminate_speech, engage, disengage, listen):
     try:
         while True:
             try                 : data = int(client_socket.recv(1024).decode())
-            except Exception    : data = -1  
+            except Exception    : data = -1
 
             # State machine
-            if      data == 0   : engage.set(); disengage.clear(); print('ENGAGE')
-            elif    data == 1   : disengage.set(); engage.clear(); print('DISENGAGE')
+            if      data == 0   : engage.set(); disengage.clear()
+            elif    data == 1   : disengage.set(); engage.clear()
             elif    data == 2   : listen.set()
 
             if terminate_speech.is_set(): break
