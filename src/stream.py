@@ -27,8 +27,8 @@ def convert_for_sending(tracking):
         'tracking': tracking.tracking,
         'tracked_point': tracking.tracked_point,
         'prediction': tracking.prediction,
-        'clusters': clusters_dict,
-        'image': tracking.image
+        'clusters': clusters_dict
+        # 'image': tracking.image
     }
 
     return tracking_data

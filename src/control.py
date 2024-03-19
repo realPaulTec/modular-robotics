@@ -6,6 +6,7 @@ from queue import Queue
 from threading import Thread
 import os
 import sys
+import numpy as np
 import stream
 
 # sudo /home/paultec/archiconda3/bin/python3 tracking_interface.py
@@ -80,18 +81,33 @@ def start_hall():
 
     return hall_thread, results_queue
 
-# Checking for obscales in specified ranges.
-def check_for_obstacles(clusters, min_angle, max_angle, min_distance, max_distance):
+# TODO: FIX!!!
+def find_clusters_in_range(clusters, min_angle, max_angle, min_distance, max_distance):
+    result = {}
     for label, cluster_data in clusters.items():
-        # Extract the central position in polar coordinates (r, theta)
-        r, theta = cluster_data['central_position']
+        points = np.array(cluster_data['points'])
 
-        # Return true if cluster is in the way
-        if min_angle <= theta <= max_angle and min_distance <= r <= max_distance:
-            return True
+        # Convert angles to radians for use with Euler's formula
+        min_angle_rad, max_angle_rad = np.deg2rad([min_angle, max_angle])
 
-    # Return false if no cluster is in the way
-    return False
+        # Convert points to complex numbers
+        complex_points = points[:, 0] * np.exp(1j * np.deg2rad(points[:, 1]))
+
+        # Calculate angles and magnitudes from complex numbers
+        angles      = np.mod(np.angle(complex_points), 2*np.pi)
+        distances   = np.abs(complex_points)
+
+        # Determine if angles are within the specified range, accounting for wraparound
+        if min_angle_rad <= max_angle_rad   : angle_mask = (angles >= min_angle_rad) & (angles <= max_angle_rad)
+        else                                : angle_mask = (angles >= min_angle_rad) | (angles <= max_angle_rad)
+        
+        # Distance masking
+        distance_mask = (distances >= min_distance) & (distances <= max_distance)
+        mask = angle_mask & distance_mask
+
+        if np.any(mask): result[label] = {'points': points[mask].tolist()}
+    
+    return result
 
 # Get the PWM for the motors
 def get_control(distance, direction):
@@ -123,6 +139,9 @@ while True:
         elif left.is_set()      : pwm_A, pwm_B = -100, 100      #; print('LEF')
         elif right.is_set()     : pwm_A, pwm_B = 100, -100      #; print('RGT')
         elif stop.is_set()      : pwm_A, pwm_B = 0, 0           #; print('STP')
+
+        # Collision detection
+        print(find_clusters_in_range(tracking.clusters, 140, 220, 0, 0.2))
 
         # Control the motors with set PWM values
         interface.control(-pwm_A, -pwm_B)
