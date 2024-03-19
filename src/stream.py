@@ -53,7 +53,10 @@ def streamer(tracking, stop_control):
 
 def movement_setter(data, forward, reverse, left, right, stop):
     # Clear all directions
-    directions = [forward.clear(), reverse.clear(), left.clear(), right.clear(), stop.clear()]
+    forward.clear(); reverse.clear(); left.clear(); right.clear(); stop.clear()
+
+    # Directions list
+    directions = [forward, reverse, left, right, stop]
 
     # Set according to data
     directions[data-3].set()
@@ -69,10 +72,11 @@ def receive_speech(terminate_speech, engage, disengage, forward, reverse, left, 
     try:
         while not terminate_speech.is_set():
             try                 : data = int(client_socket.recv(1024).decode())
-            except Exception    : data = -1; continue
+            except Exception    : data = -1; return
 
             # State machine
-            if      data == 0       : pass                                                            # Listen
+            if      data == -1      : return
+            elif    data == 0       : pass                                                            # Listen
             elif    data == 1       : engage.set(); disengage.clear(); print('ENG')                   # Engage
             elif    data == 2       : disengage.set(); engage.clear(); print('DIS')                   # Disengage
             else                    : movement_setter(data, forward, reverse, left, right, stop)      # Forward, Reverse, Left, Right, Stop

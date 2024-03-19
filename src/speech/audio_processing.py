@@ -71,10 +71,11 @@ class AudioProcessing:
 
         # Check that the wake index isn't -1
         if wake_index == -1:    return
+        print(wake_index)
 
         # Connecting to client & sending data
-        try                     : self.client_socket.sendall(wake_index.encode())
-        except Exception as e   : self.client_socket, addr = self.server_socket.accept(); print(f'Connected to: {addr}')
+        try                     : self.client_socket.sendall(str(wake_index).encode())
+        except Exception as e   : print(f"ERROR: {e}"); self.client_socket, addr = self.server_socket.accept(); print(f'Connected to: {addr}')
 
         # Listen # Engage # Disengage # Forward # Reverse # Left # Right # Stop
 
