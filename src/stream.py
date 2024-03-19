@@ -5,7 +5,7 @@ import time
 
 # LAPTOP '192.168.46.62' 
 # DESKTOP '192.168.53.232'
-HOST = '192.168.139.232'
+HOST = '192.168.139.62'
 PORT = 65432
 
 # Send tracking data to desktop
@@ -51,34 +51,36 @@ def streamer(tracking, stop_control):
         tracking.send_data.clear()
         time.sleep(0.1)
 
-def receive_speech(terminate_speech, engage, disengage, listen):
-    # Setting up server
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    server_socket.bind(('localhost', 5000))
-    server_socket.listen()
+def movement_setter(data, forward, reverse, left, right, stop):
+    # Clear all directions
+    directions = [forward.clear(), reverse.clear(), left.clear(), right.clear(), stop.clear()]
 
-    # Connecting to client
-    print("\nServer is waiting for a connection...")
-    client_socket, addr = server_socket.accept()
-    print(f"Connected to {addr}")
+    # Set according to data
+    directions[data-3].set()
+
+def receive_speech(terminate_speech, engage, disengage, forward, reverse, left, right, stop):
+    # Setting up server
+    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+    # Connecting to speech server
+    client_socket.connect(('localhost', 5000))
+    client_socket.settimeout(5)
 
     try:
-        while True:
+        while not terminate_speech.is_set():
             try                 : data = int(client_socket.recv(1024).decode())
-            except Exception    : data = -1
+            except Exception    : data = -1; continue
 
             # State machine
-            if      data == 0   : engage.set(); disengage.clear()
-            elif    data == 1   : disengage.set(); engage.clear()
-            elif    data == 2   : listen.set()
-
-            if terminate_speech.is_set(): break
+            if      data == 0       : pass                                                            # Listen
+            elif    data == 1       : engage.set(); disengage.clear(); print('ENG')                   # Engage
+            elif    data == 2       : disengage.set(); engage.clear(); print('DIS')                   # Disengage
+            else                    : movement_setter(data, forward, reverse, left, right, stop)      # Forward, Reverse, Left, Right, Stop
 
     finally:
-        print('Closing server...')
-
+        # Closing the client
+        print('Closing client...')
         client_socket.close()
-        server_socket.close()
 
 if __name__ == '__main__':
     receive_speech()

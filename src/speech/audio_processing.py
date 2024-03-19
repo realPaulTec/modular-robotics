@@ -25,7 +25,16 @@ with open('/home/paultec/coding/RTP3/src/speech/credentials.json', 'r') as f:
     picovoice_key = data['picovoice_key']
 
 # Create porcupine wakewrod
-porcupine = pvporcupine.create(access_key=picovoice_key, keyword_paths=[f"{script_dir}/wakewords/onyx-engage.ppn", f"{script_dir}/wakewords/onyx-stop.ppn", f"{script_dir}/wakewords/onyx.ppn"])
+porcupine = pvporcupine.create(access_key=picovoice_key, keyword_paths=[
+    f"{script_dir}/wakewords/onyx.ppn",
+    f"{script_dir}/wakewords/onyx-engage.ppn",
+    f"{script_dir}/wakewords/onyx-disengage.ppn",
+    f"{script_dir}/wakewords/onyx-forward.ppn",
+    f"{script_dir}/wakewords/onyx-reverse.ppn",
+    f"{script_dir}/wakewords/onyx-left.ppn",
+    f"{script_dir}/wakewords/onyx-right.ppn",
+    f"{script_dir}/wakewords/onyx-stop.ppn"
+])
 
 # Create OpenAI client
 client = OpenAI(api_key=openai_key)
@@ -43,25 +52,31 @@ class AudioProcessing:
         self.chunk_seconds = 2
 
         # Setup socket communication
-        try:
-            self.setup_socket()
-        except:
-            sys.exit(0)
-
+        self.setup_socket()
+        
     def setup_socket(self):
-        # Connecting socket
-        self.client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.client_socket.connect(('localhost', 5000))
-
-        print('Connecting to server...')
-
+        # Setting up socket
+        self.server_socket = socket.socket()
+        self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self.server_socket.bind(('localhost', 5000))
+        # self.server_socket.settimeout(5)
+        
+        # Listening for client
+        print('Server listening...')
+        self.server_socket.listen()
+    
     def transcribe(self, audio):
-        # print(audioop.rms(audio.tobytes(), 2))
+        # Get index of wake word
         wake_index = porcupine.process(audio)
 
-        if wake_index == 0      : self.client_socket.sendall('0'.encode())  # Engage
-        elif wake_index == 1    : self.client_socket.sendall('1'.encode())  # Stop
-        elif wake_index == 2    : self.client_socket.sendall('2'.encode())  # Listen
+        # Check that the wake index isn't -1
+        if wake_index == -1:    return
+
+        # Connecting to client & sending data
+        try                     : self.client_socket.sendall(wake_index.encode())
+        except Exception as e   : self.client_socket, addr = self.server_socket.accept(); print(f'Connected to: {addr}')
+
+        # Listen # Engage # Disengage # Forward # Reverse # Left # Right # Stop
 
     def stream_callback(self, indata, frames, time, status, audio_queue):
         # Add this chunk of audio to the queue.
@@ -95,8 +110,12 @@ if __name__ == '__main__':
     ap = AudioProcessing()
 
     try:
+        print('Starting...')
         ap.record_audio()
     finally:
         print('Closing speech...')
+        
+        # Cleanup...
         porcupine.delete()
+        ap.server_socket.close()
         ap.client_socket.close()

@@ -12,8 +12,8 @@ import stream
 # sudo /home/paultec/archiconda3/bin/python3 tracking_interface.py
 
 # Speech events & thread
-terminate_speech, engage, disengage, listen = threading.Event(), threading.Event(), threading.Event(), threading.Event()
-speech = threading.Thread(target=stream.receive_speech, args=(terminate_speech, engage, disengage, listen,))
+terminate_speech, engage, disengage, forward, reverse, left, right, stop = [threading.Event() for _ in range(8)]
+speech = threading.Thread(target=stream.receive_speech, args=(terminate_speech, engage, disengage, forward, reverse, left, right, stop,))
 speech.daemon = True
 speech.start()
 
@@ -54,15 +54,17 @@ def speech_client():
 
 def terminate():
     print('\nTerminating ...')
+    
+    # Terminate speech
+    terminate_speech.set()
+    speech.join()
+    
+    # Turn off printing errors
     sys.stderr = open(os.devnull, 'w')
     
     # Trigger exit handlers for GPIO and LiDAR
     tracking.lidar.exit_handler()
     driver.exit_handler()
-
-    # Terminate speech
-    terminate_speech.set()
-    speech.join()
     
     # Exit program
     os._exit(0)
@@ -93,7 +95,7 @@ def check_for_obstacles(clusters, min_angle, max_angle, min_distance, max_distan
 
 while True:
     try: 
-        if stop_control.is_set():   terminate()
+        # if stop_control.is_set():   terminate()
 
         # Get initial time
         time_1 = time.time()
@@ -136,6 +138,13 @@ while True:
             pwm_A = -100
             pwm_B = -100
 
+        # Voice command directions state machine
+        if forward.is_set()     : pwm_A, pwm_B = 100, 100       ; print('FWD')
+        elif reverse.is_set()   : pwm_A, pwm_B = -100, -100     ; print('REV')
+        elif left.is_set()      : pwm_A, pwm_B = -100, 100      ; print('LEF')
+        elif right.is_set()     : pwm_A, pwm_B = 100, -100      ; print('RGT')
+        elif stop.is_set()      : pwm_A, pwm_B = 0, 0           ; print('STP')
+
         # Object avoidance
         # if tracking.tracking_failiure and check_for_obstacles(tracking.clusters, -thresh_degrees, thresh_degrees, 0, tracking_distance + thresh_meters):
         #     pwm_A = -100
@@ -147,6 +156,7 @@ while True:
         #     check_for_obstacles(tracking.clusters, 0, thresh_degrees, 0, tracking_distance + thresh_meters)
         # )
 
+        # Control the motors with set PWM values
         interface.control(-pwm_A, -pwm_B)
    
     # Exiting program after keyboardinterrupt
