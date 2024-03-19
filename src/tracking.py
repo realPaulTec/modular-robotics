@@ -9,12 +9,13 @@ from kalman_filter import KalmanFilter
 import os
 import sys
 import numpy as np
+import cv2
 import time
 
 class Tracking:
     # scanning constants
     MAX_DISTANCE_METERS = 2.5
-    SAMPLE_RATE = 441 #441
+    SAMPLE_RATE = int(441*1.5) #441
 
     # acquisition constants
     ACQUISITION_DISTANCE = 0.5
@@ -57,9 +58,16 @@ class Tracking:
         self.first_track=True
         self.send_data = Event()
 
+        # Setting up camera
+        self.camera = cv2.VideoCapture(0)
+        self.image = None
+
     def track_cycle(self):
         # Send data to user interface
         self.send_data.set()
+
+        # Read the camera using OpenCV
+        _, self.image = self.camera.read()
 
         # Get LiDAR data from scan
         coordinates = self.lidar.fetch_scan_data()
@@ -86,8 +94,8 @@ class Tracking:
         self.clusters = clusters
 
         # Acquire object if not tracking or return on override
-        if      self.override == True   :  self.reset_tracking(); return
-        elif    self.tracking == False  :  self.acquisition(clusters); return
+        if      self.override == True   :  self.reset_tracking();       return
+        elif    self.tracking == False  :  self.acquisition(clusters);  return
         
         # Make a Kalman filter prediction for the next position
         self.kalman_filter.predict()

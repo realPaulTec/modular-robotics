@@ -34,6 +34,15 @@ porcupine = pvporcupine.create(access_key=picovoice_key, keyword_paths=[
     f"{script_dir}/wakewords/onyx-left.ppn",
     f"{script_dir}/wakewords/onyx-right.ppn",
     f"{script_dir}/wakewords/onyx-stop.ppn"
+], sensitivities=[
+    0.3,
+    1.0,
+    1.0,
+    0.5,
+    0.5,
+    0.1,
+    0.3,
+    1.0
 ])
 
 # Create OpenAI client
@@ -59,23 +68,21 @@ class AudioProcessing:
         self.server_socket = socket.socket()
         self.server_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         self.server_socket.bind(('localhost', 5000))
-        # self.server_socket.settimeout(5)
         
         # Listening for client
         print('Server listening...')
         self.server_socket.listen()
+        self.server_socket.settimeout(10)
     
     def transcribe(self, audio):
         # Get index of wake word
         wake_index = porcupine.process(audio)
 
-        # Check that the wake index isn't -1
-        if wake_index == -1:    return
-        print(wake_index)
-
         # Connecting to client & sending data
         try                     : self.client_socket.sendall(str(wake_index).encode())
-        except Exception as e   : print(f"ERROR: {e}"); self.client_socket, addr = self.server_socket.accept(); print(f'Connected to: {addr}')
+        except Exception as e   :
+            try                     : print(f"ERROR: {e}"); self.client_socket, addr = self.server_socket.accept(); print(f'Connected to: {addr}')
+            except Exception as e   : print(f"ERROR: {e}")
 
         # Listen # Engage # Disengage # Forward # Reverse # Left # Right # Stop
 

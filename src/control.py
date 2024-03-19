@@ -4,7 +4,6 @@ import threading
 from tracking import Tracking
 from queue import Queue
 from threading import Thread
-import time
 import os
 import sys
 import stream
@@ -22,6 +21,7 @@ driver = MotorDriver(33, 36, 35, 32, 38, 40, 12, 16, 18, 22)
 
 # generating new lidar class "scanner"
 tracking = Tracking()
+tracking.override = True
 
 # Stop event for hall feedback
 stop_feedback = threading.Event()
@@ -53,7 +53,7 @@ def speech_client():
     elif disengage.is_set() : tracking.override = True
 
 def terminate():
-    print('\nTerminating ...')
+    print('\nTerminating...')
     
     # Terminate speech
     terminate_speech.set()
@@ -93,68 +93,36 @@ def check_for_obstacles(clusters, min_angle, max_angle, min_distance, max_distan
     # Return false if no cluster is in the way
     return False
 
+# Get the PWM for the motors
+def get_control(distance, direction):
+    # Direction adjustments
+    if direction > thresh_degrees       : return 0, 100
+    elif direction < -thresh_degrees    : return 100, 0
+
+    # Distance adjustments
+    if tracking_distance - thresh_meters < distance < tracking_distance + thresh_meters : return 0, 0
+    elif distance < tracking_distance - thresh_meters                                   : return -100, -100
+
+    return 100, 100
+
 while True:
     try: 
-        # if stop_control.is_set():   terminate()
-
-        # Get initial time
-        time_1 = time.time()
-
         # Run speech client
         speech_client()
 
         # Tracking system cycle
         tracking.track_cycle()
 
-        # Getting the direction in degrees and distance to person
-        if tracking.tracked_point:
-            distance, direction = tracking.tracked_point[0], math.degrees(tracking.tracked_point[1])
-        else:
-            # Set PWM for both motors to Zero if not tracking
-            pwm_A = 0
-            pwm_B = 0
-
-            # Interface with the motors
-            interface.control(pwm_A, pwm_B)
-
-            continue
-
-        # Left - Right PWM adjustments TODO: FIX PWM!!!
-        if direction > thresh_degrees:
-            pwm_A = 0
-            pwm_B = 100
-        elif direction < -thresh_degrees:
-            pwm_A = 100
-            pwm_B = 0
-        else:
-            pwm_A = 100
-            pwm_B = 100
-        
-        # Distance adjustments
-        if pwm_A == 100 and pwm_B == 100 and tracking_distance - thresh_meters < distance < tracking_distance + thresh_meters:
-            pwm_A = 0
-            pwm_B = 0
-        elif pwm_A == 100 and pwm_B == 100 and distance < tracking_distance - thresh_meters:
-            pwm_A = -100
-            pwm_B = -100
+        # Get distance and direction to user if currently tracking & Getting PWM for motor control
+        if tracking.tracked_point   : pwm_A, pwm_B = get_control(tracking.tracked_point[0], math.degrees(tracking.tracked_point[1]))
+        else                        : pwm_A, pwm_B = 0, 0 
 
         # Voice command directions state machine
-        if forward.is_set()     : pwm_A, pwm_B = 100, 100       ; print('FWD')
-        elif reverse.is_set()   : pwm_A, pwm_B = -100, -100     ; print('REV')
-        elif left.is_set()      : pwm_A, pwm_B = -100, 100      ; print('LEF')
-        elif right.is_set()     : pwm_A, pwm_B = 100, -100      ; print('RGT')
-        elif stop.is_set()      : pwm_A, pwm_B = 0, 0           ; print('STP')
-
-        # Object avoidance
-        # if tracking.tracking_failiure and check_for_obstacles(tracking.clusters, -thresh_degrees, thresh_degrees, 0, tracking_distance + thresh_meters):
-        #     pwm_A = -100
-        #     pwm_B = -100
-        # elif tracking.tracking_failiure:
-        #     tracking.tracking_failiure = False
-
-        # print(
-        #     check_for_obstacles(tracking.clusters, 0, thresh_degrees, 0, tracking_distance + thresh_meters)
-        # )
+        if forward.is_set()     : pwm_A, pwm_B = 100, 100       #; print('FWD')
+        elif reverse.is_set()   : pwm_A, pwm_B = -100, -100     #; print('REV')
+        elif left.is_set()      : pwm_A, pwm_B = -100, 100      #; print('LEF')
+        elif right.is_set()     : pwm_A, pwm_B = 100, -100      #; print('RGT')
+        elif stop.is_set()      : pwm_A, pwm_B = 0, 0           #; print('STP')
 
         # Control the motors with set PWM values
         interface.control(-pwm_A, -pwm_B)
