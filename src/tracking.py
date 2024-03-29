@@ -15,23 +15,23 @@ warnings.filterwarnings('ignore')
 
 class Tracking:
     # scanning constants
-    MAX_DISTANCE_METERS = 1.5
-    SAMPLE_RATE = int(441*1.5) #441
+    MAX_DISTANCE_METERS     = 1.5
+    SAMPLE_RATE             = 662 #441
 
     # acquisition constants
-    ACQUISITION_DISTANCE = 0.5
-    ACQUISITION_ANGLE = 0
-    ACQUISITION_RADIUS = 0.2
+    ACQUISITION_DISTANCE    = 0.5
+    ACQUISITION_ANGLE       = 0
+    ACQUISITION_RADIUS      = 0.2
 
     # DBSCAN constants
-    DBSCAN_EPS = 0.1
-    DBSCAN_MIN_SAMPLES = 3
+    DBSCAN_EPS              = 0.075
+    DBSCAN_MIN_SAMPLES      = 7
 
     # tracking constants
-    MAX_TRACK_DEVIATION = 0.5
-    MAX_TRACK_LIFETIME = 1.0
-    MAX_TRACK_RUNAWAY = 0.8
-    MAX_CLUSTER_LENGTH = 1.2
+    MAX_TRACK_DEVIATION     = 0.5
+    MAX_TRACK_LIFETIME      = 1.0
+    MAX_TRACK_RUNAWAY       = 0.8
+    MAX_CLUSTER_LENGTH      = 1.2
 
     def __init__(self):
         # lidar and kalman setup
@@ -104,8 +104,8 @@ class Tracking:
         # TODO: Reimplement Extracting the Kalman filters error covariance matrix Σ
         covariance_matrix = self.kalman_filter.get_filter_covariance()
 
-        # Compute Bhattacharyya distance for each cluster
-        clusters = self.compute_bhattacharyya(clusters, current_prediction, cluster_covariance, filter_covariance=covariance_matrix)
+        # Compute composite distance metric for each cluster
+        clusters = self.compute_distance_metric(clusters, current_prediction, cluster_covariance, filter_covariance=covariance_matrix)
         
         # Converting prediction to polar coordinates
         current_prediction_polar = utils.cartesian_to_polar(*current_prediction)
@@ -171,8 +171,6 @@ class Tracking:
             'points_cartesian'          : [],
             'mean_vector'               : (0, 0),
             'length'                    : 0,
-            'mahalanobis_distance'      : 0,
-            'bhattacharyya_distance'    : 0,
             'composite_distance'        : 0,
             'covariance'                : [[0, 0], [0, 0]],
 
@@ -233,18 +231,21 @@ class Tracking:
 
         return clusters
 
-    def compute_bhattacharyya(self, clusters, current_prediction, covariance_matrix, filter_covariance=[], weight_bhattacharyya=1, weight_covariance=1):
-        running_bhattacharyya, running_mahalanobis, running_composite = 0, 0, 0
+    def compute_distance_metric(self, clusters, current_prediction, covariance_matrix, filter_covariance=[], weight_bhattacharyya=1, weight_mahalanobis=1, weight_frobenius=1):
+        running_composite = 0
         for label, cluster_data in clusters.items():
             # Skip noise
             if label == -1: continue
 
-            # Set Bhattacharyya distance for each cluster
-            cluster_data['bhattacharyya_distance']  = utils.bhattacharyya_distance(cluster_data['mean_vector'], cluster_data['covariance'], current_prediction, covariance_matrix)
-            cluster_data['composite_distance']      = weight_bhattacharyya * cluster_data['bhattacharyya_distance'] + weight_covariance * np.log(np.linalg.det(filter_covariance))
+            # Mahalanobis
+            # Bhattacharyya
+            # Wasserstein
+
+            # Compute weighted composit distance
+            cluster_data['composite_distance']\
+                = utils.wasserstein_distance(cluster_data['mean_vector'], cluster_data['covariance'], current_prediction, covariance_matrix)
 
             # Update running distance metrics!
-            running_bhattacharyya   += cluster_data['bhattacharyya_distance']
             running_composite       += cluster_data['composite_distance']
 
         # # Normalization loop
@@ -253,33 +254,31 @@ class Tracking:
         #     if label == -1: continue
 
         #     # Normalize the distances by dividing by running totals!
-        #     cluster_data['bhattacharyya_distance']  /= running_bhattacharyya
-        #     cluster_data['mahalanobis_distance']    /= running_mahalanobis
         #     cluster_data['composite_distance']      /= running_composite
 
         return clusters
 
     def filter_keys(self, clusters, current_prediction_polar):
         # # Filter the keys by distance thresholds
-        # primary_filtered_keys = [k for k in clusters.keys() if k != -1 and 
-        #                 utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
-        #                 utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < self.MAX_TRACK_DEVIATION and
-        #                 clusters[k]['length'] < self.MAX_CLUSTER_LENGTH
-        #                 ]
+        primary_filtered_keys = [k for k in clusters.keys() if k != -1 and 
+                        utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
+                        utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < self.MAX_TRACK_DEVIATION and
+                        clusters[k]['length'] < self.MAX_CLUSTER_LENGTH
+                        ]
         
-        # # Set the key amount
-        # if len(primary_filtered_keys) > 2   : c_MAX_TRACK_DEVIATION = 0.2
-        # else                                : c_MAX_TRACK_DEVIATION = 0.4
+        # Set the key amount
+        if len(primary_filtered_keys) > 2   : c_MAX_TRACK_DEVIATION = 0.2
+        else                                : c_MAX_TRACK_DEVIATION = 0.4
 
-        # # Filter the keys by distance thresholds
-        # filtered_keys = [k for k in clusters.keys() if k != -1 and 
-        #                 utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
-        #                 utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < c_MAX_TRACK_DEVIATION and
-        #                 clusters[k]['length'] < self.MAX_CLUSTER_LENGTH
-        #                 ]
+        # Filter the keys by distance thresholds
+        filtered_keys = [k for k in clusters.keys() if k != -1 and 
+                        utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
+                        utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < c_MAX_TRACK_DEVIATION and
+                        clusters[k]['length'] < self.MAX_CLUSTER_LENGTH
+                        ]
         
-        # NOTE: DEBUG
-        filtered_keys = [k for k in clusters.keys() if k != -1]
+        # # NOTE: DEBUG
+        # filtered_keys = [k for k in clusters.keys() if k != -1]
 
         return filtered_keys
 

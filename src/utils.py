@@ -79,31 +79,48 @@ def mean_and_covariance(data):
     return mean_vector, covariance_matrix
 
 # Calculate Bhattacharyya distance metric
+# def bhattacharyya_distance(mean1, cov1, mean2, cov2):
+#     mean_diff = mean2 - mean1
+#     cov_mean = (cov1 + cov2) / 2
+#     term1 = 1/8 * np.dot(np.dot(mean_diff.T, np.linalg.inv(cov_mean)), mean_diff)
+#     term2 = 1/2 * np.log(np.linalg.det(cov_mean) / np.sqrt(np.linalg.det(cov1) * np.linalg.det(cov2)))
+#     distance = term1 + term2
+#     return distance
+
 def bhattacharyya_distance(mean1, cov1, mean2, cov2):
+    # Compute the mean difference between the two distributions
     mean_diff = mean2 - mean1
+    # Calculate the average covariance matrix
     cov_mean = (cov1 + cov2) / 2
-    term1 = 1/8 * np.dot(np.dot(mean_diff.T, np.linalg.inv(cov_mean)), mean_diff)
-    term2 = 1/2 * np.log(np.linalg.det(cov_mean) / np.sqrt(np.linalg.det(cov1) * np.linalg.det(cov2)))
+    
+    # Use Cholesky decomposition for more stable inverse calculation
+    chol_cov_mean = np.linalg.cholesky(cov_mean)
+    inv_cov_mean = np.linalg.inv(chol_cov_mean).T @ np.linalg.inv(chol_cov_mean)
+    
+    # Compute the first term using the stable inverse
+    term1 = 1/8 * mean_diff.T @ inv_cov_mean @ mean_diff
+    
+    # Use Cholesky decomposition for determinant calculation to improve numerical stability
+    det_cov_mean = np.linalg.det(chol_cov_mean) ** 2
+    det_cov1 = np.linalg.det(np.linalg.cholesky(cov1)) ** 2
+    det_cov2 = np.linalg.det(np.linalg.cholesky(cov2)) ** 2
+    
+    # Compute the second term using determinants obtained from Cholesky decomposition
+    term2 = 1/2 * np.log(det_cov_mean / np.sqrt(det_cov1 * det_cov2))
+    
+    # Calculate the Bhattacharyya distance
     distance = term1 + term2
     return distance
 
 # Calculate Wasserstein distance metric for 2D distributions
-def calculate_wasserstein_distance(X, Y):
-    # Number of samples in each distribution
-    n_samples_X = X.shape[0]
-    n_samples_Y = Y.shape[0]
+def wasserstein_distance(mean1, cov1, mean2, cov2):
+    mean_diff = np.array(mean1) - np.array(mean2)
+    mean_dist_squared = np.dot(mean_diff, mean_diff)
 
-    # Uniform distribution for each set of points
-    a = np.ones((n_samples_X,)) / n_samples_X
-    b = np.ones((n_samples_Y,)) / n_samples_Y
+    cov_sqrt = sqrtm(np.dot(np.dot(cov1, cov2), cov1))
+    cov_dist = np.trace(cov1 + cov2 - 2*cov_sqrt)
 
-    # Cost matrix: Euclidean distance between points
-    M = ot.dist(X, Y, metric='euclidean')
-
-    # Calculate the Wasserstein distance
-    distance = ot.emd2(a, b, M)
-    
-    return distance
+    return np.sqrt(mean_dist_squared + cov_dist)
 
 # Calculate polar centers using Euler's formula
 def calculate_polar_center(coordinates):
@@ -118,7 +135,14 @@ def calculate_polar_center(coordinates):
 
 # Calculate the length of the clusters
 def calculate_cluster_length(coordinates):
-    return  np.sum(np.sqrt(np.sum(np.diff(coordinates, axis=0)**2, axis=1)))
+    # Get differences of consecutive points
+    differences = np.diff(coordinates, axis=0)
+    
+    # Calculate euclidean distances between consecutive points
+    distances = np.sqrt(np.sum(differences ** 2, axis=1))
+    
+    # Return the sum of the distances
+    return  np.sum(distances)
 
 # Get estimated rotation and transformation
 def estimate_translation(arr1, arr2, max_points):
