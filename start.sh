@@ -1,4 +1,5 @@
 # #!/bin/bash
 
-sudo python3 src/control.py &
-exec ./speech.sh
+exec ./speech.sh &
+sudo python3 src/control.py
+

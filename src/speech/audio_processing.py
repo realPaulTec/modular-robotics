@@ -35,14 +35,14 @@ porcupine = pvporcupine.create(access_key=picovoice_key, keyword_paths=[
     f"{script_dir}/wakewords/onyx-right.ppn",
     f"{script_dir}/wakewords/onyx-stop.ppn"
 ], sensitivities=[
+    0.2,
+    0.7,
+    0.9,
     0.3,
-    1.0,
-    1.0,
-    0.5,
-    0.5,
-    0.1,
     0.3,
-    1.0
+    0.2,
+    0.2,
+    0.8
 ])
 
 # Create OpenAI client

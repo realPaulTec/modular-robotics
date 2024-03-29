@@ -50,8 +50,12 @@ streamer.daemon = True
 streamer.start()
 
 def speech_client():
+    # Set override
     if engage.is_set()      : tracking.override = False
     elif disengage.is_set() : tracking.override = True
+
+    # Clear both
+    engage.clear(); disengage.clear()
 
 def terminate():
     print('\nTerminating...')
@@ -141,7 +145,8 @@ while True:
         elif stop.is_set()      : pwm_A, pwm_B = 0, 0           #; print('STP')
 
         # Collision detection
-        print(find_clusters_in_range(tracking.clusters, 140, 220, 0, 0.2))
+        # print(find_clusters_in_range(tracking.clusters, 140, 220, 0, 0.2))
+        # print(f'A: {pwm_A} || B: {pwm_B}')
 
         # Control the motors with set PWM values
         interface.control(-pwm_A, -pwm_B)

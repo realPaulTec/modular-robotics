@@ -5,7 +5,7 @@ import time
 
 # LAPTOP '192.168.46.62' 
 # DESKTOP '192.168.53.232'
-HOST = '192.168.139.232'
+HOST = '192.168.171.62'
 PORT = 65432
 
 # Send tracking data to desktop
@@ -15,20 +15,20 @@ def send_data(tracking_data):
         # Prefix each message with a 4-byte length (network byte order)
         message = struct.pack('>I', len(data)) + data
         
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.connect((HOST, PORT))
-            s.sendall(message)
+        s.connect((HOST, PORT))
+        s.sendall(message)
 
 # Convert defaultdict to a regular dict for pickling
 def convert_for_sending(tracking):
     clusters_dict = dict(tracking.clusters)
 
     tracking_data = {
-        'tracking': tracking.tracking,
-        'tracked_point': tracking.tracked_point,
-        'prediction': tracking.prediction,
-        'clusters': clusters_dict
-        # 'image': tracking.image
+        'tracking'      : tracking.tracking,
+        'tracked_point' : tracking.tracked_point,
+        'prediction'    : tracking.prediction,
+        'clusters'      : clusters_dict,
+        'override'      : tracking.override,
+        'accuracy'      : tracking.kalman_accuracy
     }
 
     return tracking_data
@@ -79,12 +79,14 @@ def receive_speech(terminate_speech, engage, disengage, forward, reverse, left, 
 
             # State machine
             if      data == -1      : continue
-            elif    data == 0       : pass                                                                                                      # Listen
-            elif    data == 1       : engage.set(); disengage.clear(); movement_setter(data, forward, reverse, left, right, stop, reset=True)   # Engage
-            elif    data == 2       : disengage.set(); engage.clear(); movement_setter(data, forward, reverse, left, right, stop, reset=True)   # Disengage
-            else                    : movement_setter(data, forward, reverse, left, right, stop)                                                # Forward, Reverse, Left, Right, Stop
+            elif    data == 0       : pass                                                                                                                                      # Listen
+            elif    data == 1       : engage.set(); disengage.clear(); movement_setter(data, forward, reverse, left, right, stop, reset=True); print('\rENGAGED', end='')       # Engage
+            elif    data == 2       : disengage.set(); engage.clear(); movement_setter(data, forward, reverse, left, right, stop, reset=True); print('\rDISENGAGED', end='')    # Disengage
+            else                    : movement_setter(data, forward, reverse, left, right, stop)                                                                                # Forward, Reverse, Left, Right, Stop
+    
     except Exception as e:
         print(f'ERROR: {e}')
+    
     finally:
         # Closing the client
         print(f'Closing client...')

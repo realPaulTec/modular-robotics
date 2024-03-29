@@ -9,13 +9,14 @@ from kalman_filter import KalmanFilter
 import os
 import sys
 import numpy as np
-# import cv2
 import time
+import warnings
+warnings.filterwarnings('ignore')
 
 class Tracking:
     # scanning constants
-    MAX_DISTANCE_METERS = 2.5
-    SAMPLE_RATE = int(441*1.2) #441
+    MAX_DISTANCE_METERS = 1.5
+    SAMPLE_RATE = int(441*1.5) #441
 
     # acquisition constants
     ACQUISITION_DISTANCE = 0.5
@@ -24,13 +25,13 @@ class Tracking:
 
     # DBSCAN constants
     DBSCAN_EPS = 0.1
-    DBSCAN_MIN_SAMPLES = 5
+    DBSCAN_MIN_SAMPLES = 3
 
     # tracking constants
-    MAX_TRACK_DEVIATION = 0.4
+    MAX_TRACK_DEVIATION = 0.5
     MAX_TRACK_LIFETIME = 1.0
-    MAX_TRACK_RUNAWAY = 0.6
-    MAX_CLUSTER_LENGTH = 0.4
+    MAX_TRACK_RUNAWAY = 0.8
+    MAX_CLUSTER_LENGTH = 1.2
 
     def __init__(self):
         # lidar and kalman setup
@@ -57,17 +58,11 @@ class Tracking:
         # Class variables
         self.first_track=True
         self.send_data = Event()
-
-        # Setting up camera
-        # self.camera = cv2.VideoCapture(0)
-        self.image = None
+        self.kalman_accuracy = 0
 
     def track_cycle(self):
         # Send data to user interface
         self.send_data.set()
-
-        # Read the camera using OpenCV
-        # _, self.image = self.camera.read()
 
         # Get LiDAR data from scan
         coordinates = self.lidar.fetch_scan_data()
@@ -109,8 +104,8 @@ class Tracking:
         # TODO: Reimplement Extracting the Kalman filters error covariance matrix Σ
         covariance_matrix = self.kalman_filter.get_filter_covariance()
 
-        # Compute Mahalanobis distance for each cluster
-        clusters = self.compute_bhattacharyya(clusters, current_prediction, cluster_covariance)
+        # Compute Bhattacharyya distance for each cluster
+        clusters = self.compute_bhattacharyya(clusters, current_prediction, cluster_covariance, filter_covariance=covariance_matrix)
         
         # Converting prediction to polar coordinates
         current_prediction_polar = utils.cartesian_to_polar(*current_prediction)
@@ -119,21 +114,14 @@ class Tracking:
         filtered_keys = self.filter_keys(clusters, current_prediction_polar)
 
         # Find cluster with lowest Bhattacharyya / Mahalanobis distance
-        metric = 'bhattacharyya_distance'
-        closest_cluster_label = min(filtered_keys, key=lambda k: clusters[k][metric], default=None)
-        
+        closest_cluster_label = min(filtered_keys, key=lambda k: clusters[k]["composite_distance"], default=None)
+
         # Set trackable property
         for key in list(clusters.keys()):
             if key not in filtered_keys:    clusters[key]['trackable'] = False        
 
-        # TODO: Implement historical cross-check
-        # NOTE: 
-        # I could implement simplified tracking for non-target objects emitting the kalman filter, only using closest-Bhattacharyya
-        # If the closest Bhattacharyya from an old object which was NOT the target in the last cycle, now is the target that indicates a failiure 
-        
+        # TODO: Implement Bayes-Filter        
         if closest_cluster_label: #and self.historical_crosscheck(clusters, closest_cluster_label):
-            # print(clusters[closest_cluster_label]['bhattacharyya_distance'])
-
             # Set current clusters to historic
             self.hclosest_cluster_label = closest_cluster_label
             self.hclusters = clusters
@@ -145,14 +133,12 @@ class Tracking:
             self.tracked_point = clusters[closest_cluster_label]['central_position']
             self.last_track = time.time()
 
+            # Update filter accuracy
+            if len(self.prediction) > 0:
+                self.kalman_accuracy = np.mean(clusters[closest_cluster_label]['mean_vector'] - self.prediction)
+
             # Update Kalman filter
             self.kalman_filter.update(clusters[closest_cluster_label])
-        
-        elif not self.historical_crosscheck(clusters, closest_cluster_label):
-            # Reset tracking
-            self.reset_tracking()
-
-            print('FAILIURE')
 
         elif (self.last_track + self.MAX_TRACK_LIFETIME) < time.time():
             # Reset lost track after lifetime exceeded
@@ -184,9 +170,10 @@ class Tracking:
             # Cartesian variables for tracking
             'points_cartesian'          : [],
             'mean_vector'               : (0, 0),
-            'area'                      : 0,
+            'length'                    : 0,
             'mahalanobis_distance'      : 0,
             'bhattacharyya_distance'    : 0,
+            'composite_distance'        : 0,
             'covariance'                : [[0, 0], [0, 0]],
 
             # Polar variables for plotting & control
@@ -246,64 +233,63 @@ class Tracking:
 
         return clusters
 
-    def compute_bhattacharyya(self, clusters, current_prediction, covariance_matrix):
+    def compute_bhattacharyya(self, clusters, current_prediction, covariance_matrix, filter_covariance=[], weight_bhattacharyya=1, weight_covariance=1):
+        running_bhattacharyya, running_mahalanobis, running_composite = 0, 0, 0
         for label, cluster_data in clusters.items():
             # Skip noise
             if label == -1: continue
 
             # Set Bhattacharyya distance for each cluster
-            cluster_data['bhattacharyya_distance'] = np.round(
-                utils.bhattacharyya_distance(cluster_data['mean_vector'], cluster_data['covariance'], current_prediction, covariance_matrix),
-                decimals=3
-            )
+            cluster_data['bhattacharyya_distance']  = utils.bhattacharyya_distance(cluster_data['mean_vector'], cluster_data['covariance'], current_prediction, covariance_matrix)
+            cluster_data['composite_distance']      = weight_bhattacharyya * cluster_data['bhattacharyya_distance'] + weight_covariance * np.log(np.linalg.det(filter_covariance))
 
-        return clusters
+            # Update running distance metrics!
+            running_bhattacharyya   += cluster_data['bhattacharyya_distance']
+            running_composite       += cluster_data['composite_distance']
 
-    def compute_mahalanobis(self, clusters, current_prediction, covariance_matrix):
-        for label, cluster_data in clusters.items():
-            # Skip noise
-            if label == -1: continue
-            
-            # Set Mahalanobis distance for each cluster 
-            cluster_data['mahalanobis_distance'] = np.round(
-                utils.mahalanobis_distance(cluster_data['mean_vector'], current_prediction, covariance_matrix),
-                decimals=3
-                )
-            
+        # # Normalization loop
+        # for label, cluster_data in clusters.items():
+        #     # Skip noise
+        #     if label == -1: continue
+
+        #     # Normalize the distances by dividing by running totals!
+        #     cluster_data['bhattacharyya_distance']  /= running_bhattacharyya
+        #     cluster_data['mahalanobis_distance']    /= running_mahalanobis
+        #     cluster_data['composite_distance']      /= running_composite
+
         return clusters
 
     def filter_keys(self, clusters, current_prediction_polar):
-        # Filter the keys by distance thresholds
-        filtered_keys = [k for k in clusters.keys() if k != -1 and 
-                         utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
-                         utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < self.MAX_TRACK_DEVIATION and
-                         clusters[k]['length'] < self.MAX_CLUSTER_LENGTH
-                         ]
+        # # Filter the keys by distance thresholds
+        # primary_filtered_keys = [k for k in clusters.keys() if k != -1 and 
+        #                 utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
+        #                 utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < self.MAX_TRACK_DEVIATION and
+        #                 clusters[k]['length'] < self.MAX_CLUSTER_LENGTH
+        #                 ]
         
+        # # Set the key amount
+        # if len(primary_filtered_keys) > 2   : c_MAX_TRACK_DEVIATION = 0.2
+        # else                                : c_MAX_TRACK_DEVIATION = 0.4
+
+        # # Filter the keys by distance thresholds
+        # filtered_keys = [k for k in clusters.keys() if k != -1 and 
+        #                 utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
+        #                 utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < c_MAX_TRACK_DEVIATION and
+        #                 clusters[k]['length'] < self.MAX_CLUSTER_LENGTH
+        #                 ]
+        
+        # NOTE: DEBUG
+        filtered_keys = [k for k in clusters.keys() if k != -1]
+
         return filtered_keys
-
-    def historical_crosscheck(self, clusters, closest_cluster_label):
-        # Return true if there is no closest_cluster_label 
-        if not closest_cluster_label:   return True
-
-        # Compute Bhattacharyya distances from historical clusters to target
-        hclusters = self.compute_bhattacharyya(self.hclusters, clusters[closest_cluster_label]['mean_vector'], clusters[closest_cluster_label]['covariance'])
-
-        # Filter keys
-        filter_keys = self.filter_keys(hclusters, clusters[closest_cluster_label]['central_position'])
-
-        # Find cluster with lowest Bhattacharyya / Mahalanobis distance
-        closest_hcluster_key = min(filter_keys, key=lambda k: hclusters[k]['bhattacharyya_distance'], default=None)
-        
-        # NOTE: There are usually two legs :/ But they do tend to have the same covariance...
-        return True #closest_hcluster_key == self.hclosest_cluster_label or self.first_track
 
     def reset_tracking(self):
         # Reset lost track after lifetime exceeded
         self.tracked_point = []
         self.tracking = False
         self.first_track = True
-        # self.kalman_filter = KalmanFilter(self.ACQUISITION_DISTANCE)
+        self.override = True
+        self.kalman_filter = KalmanFilter(self.ACQUISITION_DISTANCE)
 
 if __name__ == "__main__":
     # Generating new tracking class
@@ -331,11 +317,8 @@ if __name__ == "__main__":
             tracking_data = stream.convert_for_sending(tracking)
             
             # Send data to desktop
-            try:
-                stream.send_data(tracking_data)
-            except Exception as e:
-                pass
-                # print(f'\nERROR {e}')
+            try                     : stream.send_data(tracking_data)
+            except Exception as e   : pass
 
             # Clear send_data event
             tracking.send_data.clear()
