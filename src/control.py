@@ -1,4 +1,5 @@
 import math
+import time
 from drivers import MotorDriver, MotorInterface
 import threading
 from tracking import Tracking
@@ -8,8 +9,17 @@ import os
 import sys
 import numpy as np
 import stream
+from BNO055 import BNO055
 
-# sudo /home/paultec/archiconda3/bin/python3 tracking_interface.py
+# Generating new BNO
+bno = BNO055()
+
+if not bno.begin(mode=BNO055.OPERATION_MODE_NDOF):
+    print("Error initializing BNO055")
+    exit()
+
+time.sleep(2)
+bno.setExternalCrystalUse(True)
 
 # Speech events & thread
 terminate_speech, engage, disengage, forward, reverse, left, right, stop = [threading.Event() for _ in range(8)]
@@ -125,13 +135,25 @@ def get_control(distance, direction):
 
     return 100, 100
 
+def get_heading():
+    # Read compass data (Heading, Roll, Pitch)
+    heading, roll, pitch = bno.getVector(BNO055.VECTOR_EULER)
+
+    # Output the readings
+    # print(f"\rHeading: {heading:.2f}, Roll: {roll:.2f}, Pitch: {pitch:.2f}", end='')
+
+    return heading
+
 while True:
     try: 
         # Run speech client
         speech_client()
 
+        # Get sensor heading
+        heading = get_heading()
+
         # Tracking system cycle
-        tracking.track_cycle()
+        tracking.track_cycle(heading=heading)
 
         # Get distance and direction to user if currently tracking & Getting PWM for motor control
         if tracking.tracked_point   : pwm_A, pwm_B = get_control(tracking.tracked_point[0], math.degrees(tracking.tracked_point[1]))

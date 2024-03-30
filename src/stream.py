@@ -22,13 +22,18 @@ def send_data(tracking_data):
 def convert_for_sending(tracking):
     clusters_dict = dict(tracking.clusters)
 
+    # Remove 'points_cartesian' from each cluster
+    for cluster in clusters_dict.values():
+        del cluster['points_cartesian']
+
     tracking_data = {
         'tracking'      : tracking.tracking,
         'tracked_point' : tracking.tracked_point,
         'prediction'    : tracking.prediction,
         'clusters'      : clusters_dict,
         'override'      : tracking.override,
-        'accuracy'      : tracking.kalman_accuracy
+        'accuracy'      : tracking.kalman_accuracy,
+        'heading'       : tracking.heading
     }
 
     return tracking_data

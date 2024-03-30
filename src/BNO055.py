@@ -284,7 +284,7 @@ class BNO055:
 if __name__ == '__main__':
     bno = BNO055()
 
-    if bno.begin(mode=BNO055.OPERATION_MODE_COMPASS) is not True:
+    if bno.begin(mode=BNO055.OPERATION_MODE_NDOF) is not True:
         print("Error initializing device")
         exit()
 

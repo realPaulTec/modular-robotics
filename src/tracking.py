@@ -59,8 +59,9 @@ class Tracking:
         self.first_track=True
         self.send_data = Event()
         self.kalman_accuracy = 0
+        self.heading = 0
 
-    def track_cycle(self):
+    def track_cycle(self, heading=0):
         # Send data to user interface
         self.send_data.set()
 
@@ -71,7 +72,7 @@ class Tracking:
         if not coordinates.any(): self.clusters.clear(); return
         
         # Offset coordinates
-        coordinates = self.offset_coordinates(coordinates)
+        coordinates = self.offset_coordinates(coordinates, angle=heading)
 
         # Perform DBSCAN clustering and returning labels
         labels = self.clustering(coordinates)
@@ -85,12 +86,13 @@ class Tracking:
         # Compute pre-tracking properties of clusters in single loop
         clusters = self.compute_properties(clusters)
 
-        # Pass clusters to user interface
+        # Pass clusters and heading to user interface
         self.clusters = clusters
+        self.heading = heading
 
         # Acquire object if not tracking or return on override
-        if      self.override == True   :  self.reset_tracking();       return
-        elif    self.tracking == False  :  self.acquisition(clusters);  return
+        if      self.override == True   :  self.reset_tracking()                        ; return
+        elif    self.tracking == False  :  self.acquisition(clusters, heading=heading)  ; return
         
         # Make a Kalman filter prediction for the next position
         self.kalman_filter.predict()
@@ -148,9 +150,9 @@ class Tracking:
         self.kalman_filter.predict()
         self.prediction = self.kalman_filter.get_current_prediction()
 
-    def offset_coordinates(self, coordinates):
+    def offset_coordinates(self, coordinates, angle=0):
         # Offset cluster coordinates
-        coordinates = utils.offset_polar_coordinates(coordinates, 0, 180)
+        coordinates = utils.offset_polar_coordinates(coordinates, 0, (180 + angle) % 360)
 
         return coordinates
 
@@ -191,13 +193,13 @@ class Tracking:
 
         return clusters
        
-    def acquisition(self, clusters):
+    def acquisition(self, clusters, heading=0):
         for label, cluster_data in clusters.items():
             # Skip noise
             if label == -1: continue
             
             # Checking if any cluster is within the acquisition circle
-            distance = utils.distance_polar(cluster_data['central_position'], (self.ACQUISITION_DISTANCE, self.ACQUISITION_ANGLE))
+            distance = utils.distance_polar(cluster_data['central_position'], (self.ACQUISITION_DISTANCE, np.deg2rad(-self.heading)))
             
             if distance < self.ACQUISITION_RADIUS:
                 # Setting tracked point to acquired cluster
@@ -213,6 +215,10 @@ class Tracking:
                 # Set current clusters to historic
                 self.hclosest_cluster_label = label
                 self.hclusters = clusters
+
+                # Setting acquisition heading 
+                self.acquisition_heading = heading
+
                 break
 
     def compute_properties(self, clusters):
