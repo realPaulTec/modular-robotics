@@ -125,6 +125,8 @@ def find_clusters_in_range(clusters, min_angle, max_angle, min_distance, max_dis
 
 # Get the PWM for the motors
 def get_control(distance, direction):
+    # print(direction, distance, tracking.heading)
+
     # Direction adjustments
     if direction > thresh_degrees       : return 0, 100
     elif direction < -thresh_degrees    : return 100, 0
@@ -139,10 +141,16 @@ def get_heading():
     # Read compass data (Heading, Roll, Pitch)
     heading, roll, pitch = bno.getVector(BNO055.VECTOR_EULER)
 
-    # Output the readings
-    # print(f"\rHeading: {heading:.2f}, Roll: {roll:.2f}, Pitch: {pitch:.2f}", end='')
-
     return heading
+
+def correct_angle(angle, heading):
+    # Adjust object_degree by magnetic_heading
+    adjusted_angle = angle + heading - 360
+    
+    # Normalize the result to be within -180 to 180 degrees
+    adjusted_angle = (adjusted_angle + 180) % 360 - 180
+    
+    return adjusted_angle
 
 while True:
     try: 
@@ -156,7 +164,7 @@ while True:
         tracking.track_cycle(heading=heading)
 
         # Get distance and direction to user if currently tracking & Getting PWM for motor control
-        if tracking.tracked_point   : pwm_A, pwm_B = get_control(tracking.tracked_point[0], math.degrees(tracking.tracked_point[1]))
+        if tracking.tracked_point   : pwm_A, pwm_B = get_control(tracking.tracked_point[0], correct_angle(np.rad2deg(tracking.tracked_point[1]), heading))
         else                        : pwm_A, pwm_B = 0, 0 
 
         # Voice command directions state machine
