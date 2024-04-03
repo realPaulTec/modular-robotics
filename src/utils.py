@@ -4,6 +4,7 @@ from scipy.linalg import sqrtm
 from scipy.interpolate import interp1d
 from sklearn.kernel_approximation import svd
 from sklearn.neighbors import KDTree
+from scipy.optimize import linear_sum_assignment
 
 # Conversion formulas
 polar_to_cartesian = lambda r, theta: (r * np.cos(theta), r * np.sin(theta))
@@ -79,14 +80,6 @@ def mean_and_covariance(data):
     return mean_vector, covariance_matrix
 
 # Calculate Bhattacharyya distance metric
-# def bhattacharyya_distance(mean1, cov1, mean2, cov2):
-#     mean_diff = mean2 - mean1
-#     cov_mean = (cov1 + cov2) / 2
-#     term1 = 1/8 * np.dot(np.dot(mean_diff.T, np.linalg.inv(cov_mean)), mean_diff)
-#     term2 = 1/2 * np.log(np.linalg.det(cov_mean) / np.sqrt(np.linalg.det(cov1) * np.linalg.det(cov2)))
-#     distance = term1 + term2
-#     return distance
-
 def bhattacharyya_distance(mean1, cov1, mean2, cov2):
     # Compute the mean difference between the two distributions
     mean_diff = mean2 - mean1
@@ -113,14 +106,43 @@ def bhattacharyya_distance(mean1, cov1, mean2, cov2):
     return distance
 
 # Calculate Wasserstein distance metric for 2D distributions
+# def wasserstein_distance(mean1, cov1, mean2, cov2):
+#     mean_diff = np.array(mean1) - np.array(mean2)
+#     mean_dist_squared = np.dot(mean_diff, mean_diff)
+
+#     cov_sqrt = sqrtm(np.dot(np.dot(cov1, cov2), cov1))
+#     cov_dist = np.trace(cov1 + cov2 - 2*cov_sqrt)
+
+#     return np.sqrt(mean_dist_squared + cov_dist)
+
 def wasserstein_distance(mean1, cov1, mean2, cov2):
     mean_diff = np.array(mean1) - np.array(mean2)
     mean_dist_squared = np.dot(mean_diff, mean_diff)
 
-    cov_sqrt = sqrtm(np.dot(np.dot(cov1, cov2), cov1))
-    cov_dist = np.trace(cov1 + cov2 - 2*cov_sqrt)
+    cov2_sqrt = sqrtm(cov2)
+    
+    # Ensuring the square root matrix is real if its imaginary part is negligible.
+    if np.iscomplexobj(cov2_sqrt)   : cov2_sqrt = np.real(cov2_sqrt)
+
+    cov_sqrt = sqrtm(np.dot(np.dot(cov2_sqrt, cov1), cov2_sqrt))
+    if np.iscomplexobj(cov_sqrt)    : cov_sqrt = np.real(cov_sqrt)
+        
+    cov_dist = np.trace(cov1) + np.trace(cov2) - 2 * np.trace(cov_sqrt)
 
     return np.sqrt(mean_dist_squared + cov_dist)
+
+def general_wasserstein_distance(distribution1, distribution2, epsilon=0.1):
+    # Define uniform weights for each cluster
+    n1 = distribution1.shape[0]
+    n2 = distribution2.shape[0]
+    weights1 = np.ones(n1) / n1
+    weights2 = np.ones(n2) / n2
+
+    # Calculate the cost matrix (Euclidean distances between points in the two clusters)
+    cost_matrix = ot.dist(distribution1, distribution2, metric='euclidean')
+
+    # Compute the 2-Wasserstein distance
+    return ot.sinkhorn2(weights1, weights2, cost_matrix, epsilon)
 
 # Calculate polar centers using Euler's formula
 def calculate_polar_center(coordinates):
@@ -144,40 +166,74 @@ def calculate_cluster_length(coordinates):
     # Return the sum of the distances
     return  np.sum(distances)
 
-# Get estimated rotation and transformation
-def estimate_translation(arr1, arr2, max_points):
-    # Convert polar to Cartesian coordinates
-    A = [polar_to_cartesian(r, theta) for r, theta in arr1]
-    B = [polar_to_cartesian(r, theta) for r, theta in arr2]
+# Match clusters based on Hungarian algorithm
+# def match_clusters(previous_clusters, current_clusters, previous_target, prediction_mean):
+#     # Lower cost value to prioritize matching of previous_target
+#     priority_cost_reduction = 0
+#     non_target_cost_increase = 0 
 
-    # Center the points in A and B
-    centroid_A = np.mean(A, axis=0)
-    centroid_B = np.mean(B, axis=0)
-    A_centered = A - centroid_A
-    B_centered = B - centroid_B
+#     # Filter out noise clusters labeled as -1
+#     prev_filtered = {k: v for k, v in previous_clusters.items() if k != -1}
+#     curr_filtered = {k: v for k, v in current_clusters.items() if k != -1}
 
-    # Build a KDTree for the larger set
-    if A_centered.shape[0] > B_centered.shape[0]:
-        tree = KDTree(A_centered)
-        distances, indices = tree.query(B_centered, k=1)
-        matched_A = A_centered[indices.squeeze(), :]
-        matched_B = B_centered
-    else:
-        tree = KDTree(B_centered)
-        distances, indices = tree.query(A_centered, k=1)
-        matched_A = A_centered
-        matched_B = B_centered[indices.squeeze(), :]
+#     # Initialize the cost matrix
+#     num_clusters = max(len(prev_filtered), len(curr_filtered))
+#     cost_matrix = np.zeros((num_clusters, num_clusters))
 
-    # Compute the cross-covariance matrix
-    H = np.dot(matched_A.T, matched_B)
+#     # Prepare labels list, excluding noise
+#     previous_labels = list(prev_filtered.keys())
+#     current_labels = list(curr_filtered.keys())
 
-    # Perform SVD
-    U, S, Vt = svd(H)
-    R = np.dot(Vt.T, U.T)
+#     for i, prev_label in enumerate(previous_labels):
+#         for j, curr_label in enumerate(current_labels):
+#             if prev_label == previous_target:
+#                 # Special case for the previous target
+#                 cost = wasserstein_distance(prediction_mean, previous_clusters[prev_label]['covariance'],
+#                                             current_clusters[curr_label]['mean_vector'], current_clusters[curr_label]['covariance'])
 
-    # Ensure a proper rotation
-    if np.linalg.det(R) < 0:
-        Vt[1,:] *= -1
-        R = np.dot(Vt.T, U.T)
+#                 # Apply priority cost reduction
+#                 cost += priority_cost_reduction
+#             else:
+#                 # General case for other clusters
+#                 cost = wasserstein_distance(previous_clusters[prev_label]['mean_vector'], previous_clusters[prev_label]['covariance'],
+#                                             current_clusters[curr_label]['mean_vector'], current_clusters[curr_label]['covariance'])
+                
+#                 # Apply priority cost increase
+#                 cost += non_target_cost_increase
+            
+#             cost_matrix[i, j] = cost
 
-    return R
+#     # Apply the Hungarian algorithm to find the optimal assignment
+#     row_ind, col_ind = linear_sum_assignment(cost_matrix)
+
+#     print(cost_matrix)
+
+#     # Create the matched pairs list
+#     matched_pairs = [(previous_labels[i], current_labels[j]) for i, j in zip(row_ind, col_ind) if i < len(previous_labels) and j < len(current_labels)]
+
+#     return matched_pairs
+
+# # Get which cluster was the previous target
+# def find_current_target(matched_pairs, previous_target):
+#     for prev_label, curr_label in matched_pairs:
+#         if prev_label == previous_target:
+#             return curr_label
+#     return None
+
+# Match clusters based on Hungarian algorithm
+def match_clusters(previous_clusters, current_clusters, threshold):
+    # Convert cluster dictionaries to lists for easier indexing
+    prev_labels, prev_data = zip(*previous_clusters.items())
+    curr_labels, curr_data = zip(*current_clusters.items())
+    
+    # Create a cost matrix based on the Wasserstein distance
+    cost_matrix = np.array([[wasserstein_distance(p['mean_vector'], p['covariance'], c['mean_vector'], c['covariance'])
+                             for c in curr_data] for p in prev_data])
+    
+    # Apply the Hungarian algorithm
+    row_ind, col_ind = linear_sum_assignment(cost_matrix)
+    
+    # Filter out unmatched previous clusters 
+    matched_labels = [(prev_labels[i], curr_labels[j], cost_matrix[i, j]) for i, j in zip(row_ind, col_ind) if j < len(curr_data)]
+    
+    return matched_labels

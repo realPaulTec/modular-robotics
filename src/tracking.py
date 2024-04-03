@@ -11,12 +11,13 @@ import sys
 import numpy as np
 import time
 import warnings
+from scipy.stats import wasserstein_distance
 warnings.filterwarnings('ignore')
 
 class Tracking:
     # scanning constants
     MAX_DISTANCE_METERS     = 1.5
-    SAMPLE_RATE             = 662 #441
+    SAMPLE_RATE             = 882 #441 #662
 
     # acquisition constants
     ACQUISITION_DISTANCE    = 0.5
@@ -31,7 +32,7 @@ class Tracking:
     MAX_TRACK_DEVIATION     = 0.5
     MAX_TRACK_LIFETIME      = 1.0
     MAX_TRACK_RUNAWAY       = 0.8
-    MAX_CLUSTER_LENGTH      = 1.2
+    MAX_CLUSTER_LENGTH      = 2
 
     def __init__(self):
         # lidar and kalman setup
@@ -47,16 +48,15 @@ class Tracking:
         # Current tracking
         self.tracking = False
         self.override = False
-        self.tracked_point = []
+        self.tracked_point = ()
         self.clusters = {}
         
         # Historical tracking
-        self.hclosest_cluster_label = 0
-        self.hclusters = {}
+        self.previous_target    = {}
+        self.previous_clusters  = {}
         self.last_track = time.time()
 
         # Class variables
-        self.first_track=True
         self.send_data = Event()
         self.kalman_accuracy = 0
         self.heading = 0
@@ -97,53 +97,50 @@ class Tracking:
         # Make a Kalman filter prediction for the next position
         self.kalman_filter.predict()
 
-        # Extracting the covariance matrix for the cluster
-        cluster_covariance = self.kalman_filter.get_cluster_covariance()
-
         # Get current prediction from Kalman filter
         current_prediction = self.kalman_filter.get_current_prediction()
 
-        # TODO: Reimplement Extracting the Kalman filters error covariance matrix Σ
-        covariance_matrix = self.kalman_filter.get_filter_covariance()
+        # Extracting the Kalman filters error covariance matrix Σ
+        covariance_matrix = self.kalman_filter.get_filter_covariance()  
 
-        # Compute composite distance metric for each cluster
-        clusters = self.compute_distance_metric(clusters, current_prediction, cluster_covariance, filter_covariance=covariance_matrix)
-        
         # Converting prediction to polar coordinates
         current_prediction_polar = utils.cartesian_to_polar(*current_prediction)
-
+        
         # Filter keys for distance and length of the clusters
         filtered_keys = self.filter_keys(clusters, current_prediction_polar)
-
-        # Find cluster with lowest Bhattacharyya / Mahalanobis distance
-        closest_cluster_label = min(filtered_keys, key=lambda k: clusters[k]["composite_distance"], default=None)
-
+        
         # Set trackable property
         for key in list(clusters.keys()):
-            if key not in filtered_keys:    clusters[key]['trackable'] = False        
+            if key not in filtered_keys:    clusters[key]['trackable'] = False    
 
-        # TODO: Implement Bayes-Filter        
-        if closest_cluster_label: #and self.historical_crosscheck(clusters, closest_cluster_label):
-            # Set current clusters to historic
-            self.hclosest_cluster_label = closest_cluster_label
-            self.hclusters = clusters
+        # Compute composite distance metric for each cluster
+        clusters = self.compute_distance_metric(clusters, current_prediction, covariance_matrix)
 
-            # Reset first track
-            self.first_track = False
+        # Select the cluster with the lowest distance metric
+        current_target = min(filtered_keys, key=lambda k: clusters[k]["composite_distance"], default=None)
 
-            # Set tracked position
-            self.tracked_point = clusters[closest_cluster_label]['central_position']
+        # Set previous clusters
+        self.previous_clusters = clusters
+
+        # TODO: Implement Bayes-Filter
+        if current_target:
+            # Set previous target
+            self.previous_target = clusters[current_target]
+            
+            # Set tracked point
+            self.tracked_point = clusters[current_target]['central_position']
+
+            # Set tracked property
+            clusters[current_target]['tracked'] = True
+            
+            # Set time since last track
             self.last_track = time.time()
 
-            # Update filter accuracy
-            if len(self.prediction) > 0:
-                self.kalman_accuracy = np.mean(clusters[closest_cluster_label]['mean_vector'] - self.prediction)
-
             # Update Kalman filter
-            self.kalman_filter.update(clusters[closest_cluster_label])
+            self.kalman_filter.update(clusters[current_target])
 
+        # Reset tracking if MAX_TRACK_LIFETIME has been exceeded
         elif (self.last_track + self.MAX_TRACK_LIFETIME) < time.time():
-            # Reset lost track after lifetime exceeded
             self.reset_tracking()
 
         # Pass prediction to user interface for drawing arrow
@@ -153,7 +150,6 @@ class Tracking:
     def offset_coordinates(self, coordinates, angle=0):
         # Offset cluster coordinates
         coordinates = utils.offset_polar_coordinates(coordinates, 0, (180 + angle) % 360)
-
         return coordinates
 
     def clustering(self, coordinates):
@@ -175,6 +171,8 @@ class Tracking:
             'length'                    : 0,
             'composite_distance'        : 0,
             'covariance'                : [[0, 0], [0, 0]],
+            'prev_composite_distance'   : 0,
+            'tracked'                   : False,   
 
             # Polar variables for plotting & control
             'points'                    : [],
@@ -190,6 +188,9 @@ class Tracking:
             
             # Updating running totals for distance
             clusters[label]['count'] += 1
+
+        # Remove the noise
+        if -1 in clusters: del clusters[-1]
 
         return clusters
        
@@ -212,12 +213,8 @@ class Tracking:
                 self.tracking = True
                 self.last_track = time.time()
                 
-                # Set current clusters to historic
-                self.hclosest_cluster_label = label
-                self.hclusters = clusters
-
-                # Setting acquisition heading 
-                self.acquisition_heading = heading
+                # Set previous target
+                self.previous_target = clusters[label]
 
                 break
 
@@ -237,30 +234,29 @@ class Tracking:
 
         return clusters
 
-    def compute_distance_metric(self, clusters, current_prediction, covariance_matrix, filter_covariance=[], weight_bhattacharyya=1, weight_mahalanobis=1, weight_frobenius=1):
-        running_composite = 0
+    def compute_distance_metric(self, clusters, current_prediction, filter_covariance):
+        # Identify previous covariance
+        previous_covariance = self.kalman_filter.get_cluster_covariance()
+        
+        t1 = time.time()
         for label, cluster_data in clusters.items():
             # Skip noise
-            if label == -1: continue
+            if label == -1 or not cluster_data['trackable']: continue
 
-            # Mahalanobis
-            # Bhattacharyya
-            # Wasserstein
+            # Calculate distance metric
+            cluster_data['composite_distance'] = utils.general_wasserstein_distance(
+                np.array(self.previous_target['points_cartesian'] + (current_prediction - self.previous_target['mean_vector'])),
+                np.array(cluster_data['points_cartesian'])
+            )
 
-            # Compute weighted composit distance
-            cluster_data['composite_distance']\
-                = utils.wasserstein_distance(cluster_data['mean_vector'], cluster_data['covariance'], current_prediction, covariance_matrix)
+            # cluster_data['composite_distance'] = utils.wasserstein_distance(
+            #                 current_prediction,
+            #                 previous_covariance,
+            #                 cluster_data['mean_vector'],
+            #                 cluster_data['covariance']
+            #             )
 
-            # Update running distance metrics!
-            running_composite       += cluster_data['composite_distance']
-
-        # # Normalization loop
-        # for label, cluster_data in clusters.items():
-        #     # Skip noise
-        #     if label == -1: continue
-
-        #     # Normalize the distances by dividing by running totals!
-        #     cluster_data['composite_distance']      /= running_composite
+        print(time.time() - t1)
 
         return clusters
 
@@ -282,18 +278,39 @@ class Tracking:
                         utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < c_MAX_TRACK_DEVIATION and
                         clusters[k]['length'] < self.MAX_CLUSTER_LENGTH
                         ]
-        
-        # # NOTE: DEBUG
-        # filtered_keys = [k for k in clusters.keys() if k != -1]
+
+        t1 = time.time()
+        for label, cluster_data in clusters.items():
+            previous_composite_distances = []            
+            for previous_label, previous_cluster_data in self.previous_clusters.items():
+                previous_composite_distances.append((
+                        previous_label,
+                        utils.wasserstein_distance(
+                            cluster_data['mean_vector'],
+                            cluster_data['covariance'],
+                            previous_cluster_data['mean_vector'],
+                            previous_cluster_data['covariance']
+                        )
+                    )
+                )
+
+            # Check if the lowest distance metric is to a 
+            # lowest_distance_entry = sorted(previous_composite_distances, key=lambda x: x[1])[0]
+            # cluster_data['prev_composite_distance'] = lowest_distance_entry[1]
+
+        print(time.time()-t1)
 
         return filtered_keys
 
     def reset_tracking(self):
         # Reset lost track after lifetime exceeded
-        self.tracked_point = []
+        self.tracked_point = ()
+        
+        # Reset tracking and override
         self.tracking = False
-        self.first_track = True
         self.override = True
+
+        # Reset Kalman filter
         self.kalman_filter = KalmanFilter(self.ACQUISITION_DISTANCE)
 
 if __name__ == "__main__":

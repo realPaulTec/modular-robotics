@@ -2,10 +2,11 @@ import socket
 import pickle
 import struct
 import time
+import copy
 
 # LAPTOP '192.168.46.62' 
 # DESKTOP '192.168.53.232'
-HOST = '192.168.171.62'
+HOST = '192.168.173.62'
 PORT = 65432
 
 # Send tracking data to desktop
@@ -20,7 +21,7 @@ def send_data(tracking_data):
 
 # Convert defaultdict to a regular dict for pickling
 def convert_for_sending(tracking):
-    clusters_dict = dict(tracking.clusters)
+    clusters_dict = copy.deepcopy(dict(tracking.clusters))
 
     # Remove 'points_cartesian' from each cluster
     for cluster in clusters_dict.values():
@@ -45,7 +46,7 @@ def streamer(tracking, stop_control):
 
         # Prepare data to send
         tracking_data = convert_for_sending(tracking)
-        
+
         # Send data to desktop
         try:
             send_data(tracking_data)
@@ -68,19 +69,27 @@ def movement_setter(data, forward, reverse, left, right, stop, reset=False):
     if not reset    : directions[data-3].set()
 
 def receive_speech(terminate_speech, engage, disengage, forward, reverse, left, right, stop):
-    # Setting up server
-    client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-
-    # Connecting to speech server
-    print('Connecting to server...')
+    # Initial server setup
+    client_socket = None
     
+    # Attempt to connect until successful or terminated
     try:
-        client_socket.connect(('localhost', 5000))
-        client_socket.settimeout(5)
+        # Setup client socket
+        client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+
+        print('Attempting to connect to server...')
+
+        # Connect to speech server
+        while not terminate_speech.is_set():
+            try                 :   client_socket.connect(('localhost', 5000))
+            except Exception    :   continue
+        
+        print('Connected to server.')
 
         while not terminate_speech.is_set():
-            try                     : data = int(client_socket.recv(1024).decode())
-            except Exception as e   : data = -1; continue
+            # Attempt to receive data
+            try                         : data = int(client_socket.recv(1024).decode())
+            except Exception            : continue
 
             # State machine
             if      data == -1      : continue
@@ -88,10 +97,6 @@ def receive_speech(terminate_speech, engage, disengage, forward, reverse, left, 
             elif    data == 1       : engage.set(); disengage.clear(); movement_setter(data, forward, reverse, left, right, stop, reset=True); print('\rENGAGED', end='')       # Engage
             elif    data == 2       : disengage.set(); engage.clear(); movement_setter(data, forward, reverse, left, right, stop, reset=True); print('\rDISENGAGED', end='')    # Disengage
             else                    : movement_setter(data, forward, reverse, left, right, stop)                                                                                # Forward, Reverse, Left, Right, Stop
-    
-    except Exception as e:
-        print(f'ERROR: {e}')
-    
     finally:
         # Closing the client
         print(f'Closing client...')

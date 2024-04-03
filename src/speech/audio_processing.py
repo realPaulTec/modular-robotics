@@ -1,5 +1,6 @@
 from functools import partial
 import json
+import time
 import numpy as np
 import queue
 import sounddevice as sd
@@ -11,6 +12,19 @@ import socket
 import zmq
 import os
 import sys
+import threading
+import signal
+
+def exit_handler():
+    print('Closing speech...')
+    
+    # Cleanup...
+    porcupine.delete()
+    ap.server_socket.close()
+    ap.client_socket.close()
+
+# Register the signal handler for SIGINT
+signal.signal(signal.SIGINT, exit_handler)
 
 # Get the full path of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -72,21 +86,51 @@ class AudioProcessing:
         # Listening for client
         print('Server listening...')
         self.server_socket.listen()
-        self.server_socket.settimeout(10)
-    
+        self.client_socket = None
+
+        # Accept connections
+        conn_thread = threading.Thread(target=self.accept_connections)
+        conn_thread.daemon = True
+        conn_thread.start()
+
     def transcribe(self, audio):
+        # Exit the script if tracking is terminated
+        # if not check_if_process_is_running('TRACKING'): raise
+
         # Get index of wake word
         wake_index = porcupine.process(audio)
 
+        # Print wake inex
+        if int(wake_index) != -1    : print(f"W{wake_index}")
+        else                        : return
+
+        # Start sending thread
+        threading.Thread(target=self.send_data, args=(wake_index,)).start()
+
+    def accept_connections(self):
+        while True:
+            try:
+                if self.client_socket is None:
+                    print('Waiting for a connection...')
+                    self.client_socket, addr = self.server_socket.accept()
+                    print(f'Connected to: {addr}')
+            except Exception as e:
+                print(f'Failed to accept connection: {e}')
+
+    def send_data(self, wake_index):
+        # Return if not connected
+        if not self.client_socket: return
+
         # Connecting to client & sending data
         try                     : self.client_socket.sendall(str(wake_index).encode())
-        except Exception as e   :
-            try                     : print(f"ERROR: {e}"); self.client_socket, addr = self.server_socket.accept(); print(f'Connected to: {addr}')
-            except Exception as e   : print(f"ERROR: {e}")
-
+        except Exception as e   : print(f"Sending failed: {e}"); self.client_socket = None
+    
         # Listen # Engage # Disengage # Forward # Reverse # Left # Right # Stop
 
-    def stream_callback(self, indata, frames, time, status, audio_queue):
+    def stream_callback(self, indata, frames, time, status, audio_queue, gain_factor=2):
+        # Increase volume
+        indata *= gain_factor
+        
         # Add this chunk of audio to the queue.
         audio = indata[:, self.CHANNEL_INDEX].copy()
         audio_queue.put(audio)
@@ -121,9 +165,4 @@ if __name__ == '__main__':
         print('Starting...')
         ap.record_audio()
     finally:
-        print('Closing speech...')
-        
-        # Cleanup...
-        porcupine.delete()
-        ap.server_socket.close()
-        ap.client_socket.close()
+        exit_handler()

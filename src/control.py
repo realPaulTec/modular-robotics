@@ -18,7 +18,7 @@ if not bno.begin(mode=BNO055.OPERATION_MODE_NDOF):
     print("Error initializing BNO055")
     exit()
 
-time.sleep(2)
+time.sleep(1)
 bno.setExternalCrystalUse(True)
 
 # Speech events & thread

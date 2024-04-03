@@ -8,8 +8,8 @@ import threading
 import queue
 
 class Lidar:
-    SCAN_MODE = 3 # 3
-    MOTOR_PWM = 700 # 900
+    SCAN_MODE = 3       # 3
+    MOTOR_PWM = 900     # 900
 
     def __init__(self, SAMPLE_RATE, MAX_DISTANCE_METERS):
         # LiDAR constants
