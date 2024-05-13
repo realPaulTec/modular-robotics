@@ -28,6 +28,10 @@ def mahalanobis_distance(x, μ, Σ):
     inv_Σ = np.linalg.inv(Σ)
     return np.sqrt(np.dot(np.dot(delta, inv_Σ), delta.T))
 
+def composite_mahalanobis_distance(x, Y, VI):
+    deltas = Y - x
+    return np.sqrt(np.sum(np.dot(deltas, VI) * deltas, axis=1))
+
 # Calculate polar distance
 def distance_polar(primary, secondary):
     # Primary and secondary points
@@ -131,7 +135,7 @@ def wasserstein_distance(mean1, cov1, mean2, cov2):
 
     return np.sqrt(mean_dist_squared + cov_dist)
 
-def general_wasserstein_distance(distribution1, distribution2, epsilon=0.1):
+def general_wasserstein_distance(distribution1, distribution2, epsilon=0.01):
     # Define uniform weights for each cluster
     n1 = distribution1.shape[0]
     n2 = distribution2.shape[0]
@@ -143,6 +147,40 @@ def general_wasserstein_distance(distribution1, distribution2, epsilon=0.1):
 
     # Compute the 2-Wasserstein distance
     return ot.sinkhorn2(weights1, weights2, cost_matrix, epsilon)
+
+def composite_wasserstein_distance(distribution1, distribution2, cov_matrix2, epsilon=0.01):
+    n1 = distribution1.shape[0]
+    n2 = distribution2.shape[0]
+    weights1 = np.ones(n1) / n1
+    weights2 = np.ones(n2) / n2
+    
+    # Invert the covariance matrix for Mahalanobis distance calculations
+    VI = np.linalg.inv(cov_matrix2)
+    
+    # Calculate the cost matrix using Mahalanobis distance
+    cost_matrix = np.zeros((n1, n2))
+    for i, x in enumerate(distribution1):
+        cost_matrix[i, :] = composite_mahalanobis_distance(x, distribution2, VI)
+    
+    # Compute the 2-Wasserstein distance
+    return ot.sinkhorn2(weights1, weights2, cost_matrix, epsilon)
+    
+    # # Define uniform weights for each cluster
+    # n1 = distribution1.shape[0]
+    # n2 = distribution2.shape[0]
+    # weights1 = np.ones(n1) / n1
+    # weights2 = np.ones(n2) / n2
+
+    # # Calculate the inverse of the covariance matrix for distribution2
+    # VI = np.linalg.inv(cov_matrix2)
+
+    # # Calculate the cost matrix (Mahalanobis distances)
+    # cost_matrix = np.zeros((n1, n2))
+    # for i, x in enumerate(distribution1):
+    #     cost_matrix[i, :] = composite_mahalanobis_distance(x, distribution2, VI)
+
+    # # Compute the 2-Wasserstein distance
+    # return ot.sinkhorn2(weights1, weights2, cost_matrix, epsilon)
 
 # Calculate polar centers using Euler's formula
 def calculate_polar_center(coordinates):
@@ -165,60 +203,6 @@ def calculate_cluster_length(coordinates):
     
     # Return the sum of the distances
     return  np.sum(distances)
-
-# Match clusters based on Hungarian algorithm
-# def match_clusters(previous_clusters, current_clusters, previous_target, prediction_mean):
-#     # Lower cost value to prioritize matching of previous_target
-#     priority_cost_reduction = 0
-#     non_target_cost_increase = 0 
-
-#     # Filter out noise clusters labeled as -1
-#     prev_filtered = {k: v for k, v in previous_clusters.items() if k != -1}
-#     curr_filtered = {k: v for k, v in current_clusters.items() if k != -1}
-
-#     # Initialize the cost matrix
-#     num_clusters = max(len(prev_filtered), len(curr_filtered))
-#     cost_matrix = np.zeros((num_clusters, num_clusters))
-
-#     # Prepare labels list, excluding noise
-#     previous_labels = list(prev_filtered.keys())
-#     current_labels = list(curr_filtered.keys())
-
-#     for i, prev_label in enumerate(previous_labels):
-#         for j, curr_label in enumerate(current_labels):
-#             if prev_label == previous_target:
-#                 # Special case for the previous target
-#                 cost = wasserstein_distance(prediction_mean, previous_clusters[prev_label]['covariance'],
-#                                             current_clusters[curr_label]['mean_vector'], current_clusters[curr_label]['covariance'])
-
-#                 # Apply priority cost reduction
-#                 cost += priority_cost_reduction
-#             else:
-#                 # General case for other clusters
-#                 cost = wasserstein_distance(previous_clusters[prev_label]['mean_vector'], previous_clusters[prev_label]['covariance'],
-#                                             current_clusters[curr_label]['mean_vector'], current_clusters[curr_label]['covariance'])
-                
-#                 # Apply priority cost increase
-#                 cost += non_target_cost_increase
-            
-#             cost_matrix[i, j] = cost
-
-#     # Apply the Hungarian algorithm to find the optimal assignment
-#     row_ind, col_ind = linear_sum_assignment(cost_matrix)
-
-#     print(cost_matrix)
-
-#     # Create the matched pairs list
-#     matched_pairs = [(previous_labels[i], current_labels[j]) for i, j in zip(row_ind, col_ind) if i < len(previous_labels) and j < len(current_labels)]
-
-#     return matched_pairs
-
-# # Get which cluster was the previous target
-# def find_current_target(matched_pairs, previous_target):
-#     for prev_label, curr_label in matched_pairs:
-#         if prev_label == previous_target:
-#             return curr_label
-#     return None
 
 # Match clusters based on Hungarian algorithm
 def match_clusters(previous_clusters, current_clusters, threshold):

@@ -1,5 +1,7 @@
-# #!/bin/bash
+#!/bin/bash
 
-exec ./speech.sh &
-sudo python3 src/control.py
+# CD to src directory
+cd src/
 
+# Start control.py with sudo privileges
+sudo python3 control.py

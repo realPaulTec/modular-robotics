@@ -93,15 +93,25 @@ def terminate():
     speech.join()
 
     # Terminating speech server
-    try                         : os.killpg(proc.pid, signal.SIGTERM)
-    except ProcessLookupError   : print(f'Speech server process-{proc.pid} not found...')
+    try:
+        # Send SIGTERM & timeout after 10 seconds
+        proc.terminate()
+        proc.wait(timeout=10)
+    except ProcessLookupError:
+        print(f'Speech server process-{proc.pid} not found...')
+    except subprocess.TimeoutExpired:
+        # Send SIGKILL if termination fails
+        proc.kill()
 
     # Turn off printing errors
     sys.stderr = open(os.devnull, 'w')
-    
+      
     # Trigger exit handlers for GPIO and LiDAR
     tracking.lidar.exit_handler()
     driver.exit_handler()
+    
+    # Wait for speech server to end
+    speech_server.join()
     
     # Exit program
     os._exit(0)
@@ -146,8 +156,8 @@ def get_control(distance, direction):
     # print(direction, distance, tracking.heading)
 
     # Direction adjustments
-    if direction > thresh_degrees       : return 0, 100
-    elif direction < -thresh_degrees    : return 100, 0
+    if direction > thresh_degrees       : return -100, 100
+    elif direction < -thresh_degrees    : return 100, -100
 
     # Distance adjustments
     if tracking_distance - thresh_meters < distance < tracking_distance + thresh_meters : return 0, 0
@@ -173,7 +183,6 @@ def correct_angle(angle, heading):
 while True:
     try:
         t1 = time.time()
-
         # Run speech client
         speech_client()
 
@@ -194,19 +203,16 @@ while True:
         elif right.is_set()     : pwm_A, pwm_B = 100, -100      #; print('RGT')
         elif stop.is_set()      : pwm_A, pwm_B = 0, 0           #; print('STP')
 
-        # Collision detection
-        # print(find_clusters_in_range(tracking.clusters, 140, 220, 0, 0.2))
-        # print(f'A: {pwm_A} || B: {pwm_B}')
-
-        if      obstacle_detection(tracking.clusters, 315, 45, 0.2, heading)    : print(f'FWRD {time.time()}')
-        if      obstacle_detection(tracking.clusters, 45, 135, 0.2, heading)    : print(f'RGHT {time.time()}')
-        if      obstacle_detection(tracking.clusters, 135, 225, 0.2, heading)   : print(f'REAR {time.time()}')
-        if      obstacle_detection(tracking.clusters, 225, 315, 0.2, heading)   : print(f'LEFT {time.time()}')
+        # Obstacle detection
+        # if      obstacle_detection(tracking.clusters, 315, 45, 0.2, heading)    : print('FWRD')
+        # if      obstacle_detection(tracking.clusters, 45, 135, 0.2, heading)    : print('RGHT')
+        # if      obstacle_detection(tracking.clusters, 135, 225, 0.2, heading)   : print('REAR')
+        # if      obstacle_detection(tracking.clusters, 225, 315, 0.2, heading)   : print('LEFT')
 
         # Control the motors with set PWM values
         interface.control(-pwm_A, -pwm_B)
 
-        # print(f"dT {time.time()-t1}")
+        print(time.time() - t1)
    
     # Exiting program after keyboardinterrupt
     except KeyboardInterrupt:

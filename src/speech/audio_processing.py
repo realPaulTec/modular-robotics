@@ -1,30 +1,29 @@
 from functools import partial
 import json
-import time
 import numpy as np
 import queue
 import sounddevice as sd
 from pydub import AudioSegment
-import audioop
 import pvporcupine
 from openai import OpenAI
 import socket
-import zmq
 import os
-import sys
 import threading
 import signal
 
-def exit_handler():
+def exit_handler(signum, frame):
     print('Closing speech...')
+    try:
+        porcupine.delete()
+    except Exception as e:
+        print(f"Error closing porcupine: {e}")
     
-    # Cleanup...
-    porcupine.delete()
-    ap.server_socket.close()
-    ap.client_socket.close()
-
-# Register the signal handler for SIGINT
-signal.signal(signal.SIGINT, exit_handler)
+    try:
+        ap.server_socket.close()
+        if ap.client_socket:
+            ap.client_socket.close()
+    except Exception as e:
+        print(f"Error closing sockets: {e}")
 
 # Get the full path of the current script
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -86,17 +85,11 @@ class AudioProcessing:
         # Listening for client
         print('Server listening...')
         self.server_socket.listen()
-        self.client_socket = None
 
         # Accept connections
-        conn_thread = threading.Thread(target=self.accept_connections)
-        conn_thread.daemon = True
-        conn_thread.start()
+        self.client_socket, addr = self.server_socket.accept()
 
     def transcribe(self, audio):
-        # Exit the script if tracking is terminated
-        # if not check_if_process_is_running('TRACKING'): raise
-
         # Get index of wake word
         wake_index = porcupine.process(audio)
 
@@ -107,23 +100,13 @@ class AudioProcessing:
         # Start sending thread
         threading.Thread(target=self.send_data, args=(wake_index,)).start()
 
-    def accept_connections(self):
-        while True:
-            try:
-                if self.client_socket is None:
-                    print('Waiting for a connection...')
-                    self.client_socket, addr = self.server_socket.accept()
-                    print(f'Connected to: {addr}')
-            except Exception as e:
-                print(f'Failed to accept connection: {e}')
-
     def send_data(self, wake_index):
         # Return if not connected
         if not self.client_socket: return
 
         # Connecting to client & sending data
         try                     : self.client_socket.sendall(str(wake_index).encode())
-        except Exception as e   : print(f"Sending failed: {e}"); self.client_socket = None
+        except Exception as e   : print(f"Sending failed: {e}");
     
         # Listen # Engage # Disengage # Forward # Reverse # Left # Right # Stop
 
@@ -160,6 +143,10 @@ class AudioProcessing:
 
 if __name__ == '__main__':
     ap = AudioProcessing()
+
+    # Register the signal handler for SIGINT
+    signal.signal(signal.SIGTERM, exit_handler)
+    signal.signal(signal.SIGINT, exit_handler)
 
     try:
         print('Starting...')
