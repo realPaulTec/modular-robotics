@@ -1,3 +1,4 @@
+import atexit
 import math
 import time
 from drivers import MotorDriver, MotorInterface
@@ -23,9 +24,15 @@ tracking_distance = 0.55
 wheel_radius = 0.025
 wheelbase = 0.17
 
+# Safety margins (in meters)
+MARGIN_FRONT    = 0.5
+MARGIN_REAR     = 0.3
+MARGIN_RIGHT    = 0.25
+MARGIN_LEFT     = 0.25
+
 # Manuvering treshold
-thresh_degrees = 20
-thresh_meters = 0.05
+thresh_degrees = 10
+thresh_meters = 0.025
 
 # Startign speech process
 def run_speech_server():
@@ -37,7 +44,7 @@ speech_server = threading.Thread(target=run_speech_server())
 speech_server.start()
 
 # Wait for speech server to start
-time.sleep(2)
+time.sleep(3)
 print('Initiated speech server...')
 
 # Generating new BNO
@@ -115,6 +122,9 @@ def terminate():
     
     # Exit program
     os._exit(0)
+
+# Register function to play at exit
+atexit.register(terminate)
 
 def start_hall():
     # Create queue for results
@@ -196,6 +206,16 @@ while True:
         if tracking.tracked_point   : pwm_A, pwm_B = get_control(tracking.tracked_point[0], correct_angle(np.rad2deg(tracking.tracked_point[1]), heading))
         else                        : pwm_A, pwm_B = 0, 0 
 
+        # Obstacle detection
+        if      obstacle_detection(tracking.clusters, 315, 45, MARGIN_FRONT, heading) \
+            and forward.is_set()    : stop.set(); forward.clear()                           ; print('FWD')
+        if      obstacle_detection(tracking.clusters, 45, 135, MARGIN_RIGHT, heading) \
+            and right.is_set() or left.is_set() : stop.set(); right.clear(); left.clear()   ; print('RGT')
+        if      obstacle_detection(tracking.clusters, 135, 225, MARGIN_REAR, heading)\
+            and reverse.is_set()                : stop.set(); reverse.clear()               ; print('REV')
+        if      obstacle_detection(tracking.clusters, 225, 315, MARGIN_LEFT, heading)\
+            and left.is_set() or right.is_set() : stop.set(); left.clear(); right.clear()   ; print('LEF')
+
         # Voice command directions state machine
         if forward.is_set()     : pwm_A, pwm_B = 100, 100       #; print('FWD')
         elif reverse.is_set()   : pwm_A, pwm_B = -100, -100     #; print('REV')
@@ -203,16 +223,10 @@ while True:
         elif right.is_set()     : pwm_A, pwm_B = 100, -100      #; print('RGT')
         elif stop.is_set()      : pwm_A, pwm_B = 0, 0           #; print('STP')
 
-        # Obstacle detection
-        # if      obstacle_detection(tracking.clusters, 315, 45, 0.2, heading)    : print('FWRD')
-        # if      obstacle_detection(tracking.clusters, 45, 135, 0.2, heading)    : print('RGHT')
-        # if      obstacle_detection(tracking.clusters, 135, 225, 0.2, heading)   : print('REAR')
-        # if      obstacle_detection(tracking.clusters, 225, 315, 0.2, heading)   : print('LEFT')
-
         # Control the motors with set PWM values
         interface.control(-pwm_A, -pwm_B)
 
-        print(time.time() - t1)
+        # print(time.time() - t1)
    
     # Exiting program after keyboardinterrupt
     except KeyboardInterrupt:
