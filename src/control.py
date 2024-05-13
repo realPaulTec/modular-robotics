@@ -10,29 +10,8 @@ import sys
 import numpy as np
 import stream
 from BNO055 import BNO055
-
-# Generating new BNO
-bno = BNO055()
-
-if not bno.begin(mode=BNO055.OPERATION_MODE_NDOF):
-    print("Error initializing BNO055")
-    exit()
-
-time.sleep(1)
-bno.setExternalCrystalUse(True)
-
-# Speech events & thread
-terminate_speech, engage, disengage, forward, reverse, left, right, stop = [threading.Event() for _ in range(8)]
-speech = threading.Thread(target=stream.receive_speech, args=(terminate_speech, engage, disengage, forward, reverse, left, right, stop,))
-speech.daemon = True
-speech.start()
-
-# generating new MotorDriver class driver with motor pins
-driver = MotorDriver(33, 36, 35, 32, 38, 40, 12, 16, 18, 22)
-
-# generating new lidar class "scanner"
-tracking = Tracking()
-tracking.override = True
+import subprocess
+import signal
 
 # Stop event for hall feedback
 stop_feedback = threading.Event()
@@ -47,6 +26,45 @@ wheelbase = 0.17
 # Manuvering treshold
 thresh_degrees = 20
 thresh_meters = 0.05
+
+# Startign speech process
+def run_speech_server():
+    # Start speech process
+    global proc; proc = subprocess.Popen(["../speech.sh"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+
+# Run the speech server thread
+speech_server = threading.Thread(target=run_speech_server())
+speech_server.start()
+
+# Wait for speech server to start
+time.sleep(2)
+print('Initiated speech server...')
+
+# Generating new BNO
+bno = BNO055()
+
+if not bno.begin(mode=BNO055.OPERATION_MODE_NDOF):
+    print("Error initializing BNO055")
+    exit()
+
+time.sleep(1)
+bno.setExternalCrystalUse(True)
+print('Initiated BNO055 sensor...')
+
+# Speech events & thread
+terminate_speech, engage, disengage, forward, reverse, left, right, stop = [threading.Event() for _ in range(8)]
+speech = threading.Thread(target=stream.receive_speech, args=(terminate_speech, engage, disengage, forward, reverse, left, right, stop,))
+speech.daemon = True
+speech.start()
+
+# generating new MotorDriver class driver with motor pins
+driver = MotorDriver(33, 36, 35, 32, 38, 40, 12, 16, 18, 22)
+print('Initiated motor driver...')
+
+# generating new lidar class "scanner"
+tracking = Tracking()
+tracking.override = True
+print('Initiated tracking...')
 
 # Generating new motor interface class based on motor driver
 interface = MotorInterface(driver, wheel_radius, wheelbase)
@@ -69,11 +87,15 @@ def speech_client():
 
 def terminate():
     print('\nTerminating...')
-    
-    # Terminate speech
+
+    # Terminate speech client
     terminate_speech.set()
     speech.join()
-    
+
+    # Terminating speech server
+    try                         : os.killpg(proc.pid, signal.SIGTERM)
+    except ProcessLookupError   : print(f'Speech server process-{proc.pid} not found...')
+
     # Turn off printing errors
     sys.stderr = open(os.devnull, 'w')
     
@@ -95,33 +117,29 @@ def start_hall():
 
     return hall_thread, results_queue
 
-# TODO: FIX!!!
-def find_clusters_in_range(clusters, min_angle, max_angle, min_distance, max_distance):
-    result = {}
-    for label, cluster_data in clusters.items():
-        points = np.array(cluster_data['points'])
-
-        # Convert angles to radians for use with Euler's formula
-        min_angle_rad, max_angle_rad = np.deg2rad([min_angle, max_angle])
-
-        # Convert points to complex numbers
-        complex_points = points[:, 0] * np.exp(1j * np.deg2rad(points[:, 1]))
-
-        # Calculate angles and magnitudes from complex numbers
-        angles      = np.mod(np.angle(complex_points), 2*np.pi)
-        distances   = np.abs(complex_points)
-
-        # Determine if angles are within the specified range, accounting for wraparound
-        if min_angle_rad <= max_angle_rad   : angle_mask = (angles >= min_angle_rad) & (angles <= max_angle_rad)
-        else                                : angle_mask = (angles >= min_angle_rad) | (angles <= max_angle_rad)
-        
-        # Distance masking
-        distance_mask = (distances >= min_distance) & (distances <= max_distance)
-        mask = angle_mask & distance_mask
-
-        if np.any(mask): result[label] = {'points': points[mask].tolist()}
+# TODO: don't just look at the center
+def obstacle_detection(clusters, min_angle, max_angle, max_distance, heading):
+    # Return false if there are no clusters
+    if len(clusters) == 0: return False
     
-    return result
+    for label, cluster_data in clusters.items():
+        # Get angle and radius from cluster center
+        radius, angle = cluster_data['central_position']
+        
+        # Skip if radius not in range
+        if radius > max_distance: continue
+
+        # Normalize angle
+        angle = correct_angle(np.rad2deg(-angle), heading)
+        angle += 360 if angle < 0 else 0
+
+        if min_angle > max_angle and\
+            (angle > min_angle or angle < max_angle)    : return True
+        elif min_angle < max_angle and\
+            angle > min_angle and angle < max_angle     : return True
+
+    # Return false is there is no obstacle in the area
+    return False
 
 # Get the PWM for the motors
 def get_control(distance, direction):
@@ -153,7 +171,9 @@ def correct_angle(angle, heading):
     return adjusted_angle
 
 while True:
-    try: 
+    try:
+        t1 = time.time()
+
         # Run speech client
         speech_client()
 
@@ -178,8 +198,15 @@ while True:
         # print(find_clusters_in_range(tracking.clusters, 140, 220, 0, 0.2))
         # print(f'A: {pwm_A} || B: {pwm_B}')
 
+        if      obstacle_detection(tracking.clusters, 315, 45, 0.2, heading)    : print(f'FWRD {time.time()}')
+        if      obstacle_detection(tracking.clusters, 45, 135, 0.2, heading)    : print(f'RGHT {time.time()}')
+        if      obstacle_detection(tracking.clusters, 135, 225, 0.2, heading)   : print(f'REAR {time.time()}')
+        if      obstacle_detection(tracking.clusters, 225, 315, 0.2, heading)   : print(f'LEFT {time.time()}')
+
         # Control the motors with set PWM values
         interface.control(-pwm_A, -pwm_B)
+
+        # print(f"dT {time.time()-t1}")
    
     # Exiting program after keyboardinterrupt
     except KeyboardInterrupt:
