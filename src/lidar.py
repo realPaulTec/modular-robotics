@@ -8,8 +8,8 @@ import threading
 import queue
 
 class Lidar:
-    SCAN_MODE = 2       # 3
-    MOTOR_PWM = 1000    # 900
+    SCAN_MODE = 1
+    MOTOR_PWM = 1000
 
     def __init__(self, SAMPLE_RATE, MAX_DISTANCE_METERS):
         # LiDAR constants
@@ -18,7 +18,9 @@ class Lidar:
 
         # Connecting to lidar hardware
         self.lidar = pyrplidar.PyRPlidar()
-        self.lidar.connect(port="/dev/ttyUSB0", baudrate=115200, timeout=3)
+        self.lidar.connect(port="/dev/ttyUSB0", baudrate=115200, timeout=3) # A2M8: 115200 | A2M12: 256000
+
+        # print(self.lidar.get_samplerate())
         
         # Getting lidar status
         health = self.lidar.get_health()

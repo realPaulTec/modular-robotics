@@ -6,7 +6,7 @@ import copy
 
 # LAPTOP '192.168.46.62' 
 # DESKTOP '192.168.53.232'
-HOST = '192.168.173.62'
+HOST = '192.168.165.232'
 PORT = 65432
 
 # Send tracking data to desktop
@@ -78,12 +78,9 @@ def receive_speech(terminate_speech, engage, disengage, forward, reverse, left, 
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
         print('Attempting to connect to server...')
-
         # Connect to speech server
-        while not terminate_speech.is_set():
-            try                 :   client_socket.connect(('localhost', 5000))
-            except Exception    :   continue
-        
+        client_socket.connect(('localhost', 5000))
+        client_socket.settimeout(2)
         print('Connected to server.')
 
         while not terminate_speech.is_set():

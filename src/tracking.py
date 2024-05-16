@@ -16,8 +16,8 @@ warnings.filterwarnings('ignore')
 
 class Tracking:
     # scanning constants
-    MAX_DISTANCE_METERS     = 1.5
-    SAMPLE_RATE             = 882 #441 #662
+    MAX_DISTANCE_METERS     = 2
+    SAMPLE_RATE             = 882 #A2M8: 882 | A2M12: 500
 
     # acquisition constants
     ACQUISITION_DISTANCE    = 0.5
@@ -25,14 +25,15 @@ class Tracking:
     ACQUISITION_RADIUS      = 0.2
 
     # DBSCAN constants
-    DBSCAN_EPS              = 0.075
-    DBSCAN_MIN_SAMPLES      = 7
+    DBSCAN_EPS              = 0.085
+    DBSCAN_MIN_SAMPLES      = 3
 
     # tracking constants
     MAX_TRACK_DEVIATION     = 0.5
     MAX_TRACK_LIFETIME      = 1.0
     MAX_TRACK_RUNAWAY       = 0.8
-    MAX_CLUSTER_LENGTH      = 2
+    MAX_CLUSTER_COUNT       = 50
+    MAX_METRIC              = 0.04
 
     def __init__(self):
         # lidar and kalman setup
@@ -108,10 +109,6 @@ class Tracking:
         
         # Filter keys for distance and length of the clusters
         filtered_keys = self.filter_keys(clusters, current_prediction_polar)
-        
-        # Set trackable property
-        for key in list(clusters.keys()):
-            if key not in filtered_keys:    clusters[key]['trackable'] = False    
 
         # Compute composite distance metric for each cluster
         clusters = self.compute_distance_metric(clusters, current_prediction, covariance_matrix)
@@ -122,8 +119,19 @@ class Tracking:
         # Set previous clusters
         self.previous_clusters = clusters
 
-        # TODO: Implement Bayes-Filter
         if current_target:
+            # Get metric to last tracked point
+            previous_target_distance = utils.general_wasserstein_distance(
+                np.array(self.previous_target['points_cartesian']) - np.array(self.previous_target['mean_vector']),
+                np.array(clusters[current_target]['points_cartesian']) - np.array(clusters[current_target]['mean_vector'])
+            )
+
+            clusters[current_target]['prev_composite_distance'] = previous_target_distance
+
+        else:
+            previous_target_distance = self.MAX_METRIC
+
+        if previous_target_distance < self.MAX_METRIC:
             # Set previous target
             self.previous_target = clusters[current_target]
             
@@ -230,15 +238,11 @@ class Tracking:
             cluster_data['mean_vector'], cluster_data['covariance'] = utils.mean_and_covariance(np.array(cluster_data['points_cartesian']))
 
             # Calculate the length of each cluster
-            cluster_data['length'] = utils.calculate_cluster_length(cluster_data['points_cartesian'])
+            cluster_data['length'] = int(round(utils.calculate_cluster_length(cluster_data['points_cartesian']) * cluster_data['central_position'][0]))
 
         return clusters
 
     def compute_distance_metric(self, clusters, current_prediction, filter_covariance):
-        # Identify previous covariance
-        previous_covariance = self.kalman_filter.get_cluster_covariance()
-        
-        t1 = time.time()
         for label, cluster_data in clusters.items():
             # Skip noise
             if label == -1 or not cluster_data['trackable']: continue
@@ -249,56 +253,30 @@ class Tracking:
                 np.array(cluster_data['points_cartesian'])
             )
 
-            # cluster_data['composite_distance'] = utils.wasserstein_distance(
-            #                 current_prediction,
-            #                 previous_covariance,
-            #                 cluster_data['mean_vector'],
-            #                 cluster_data['covariance']
-            #             )
-
-        print(time.time() - t1)
-
         return clusters
 
     def filter_keys(self, clusters, current_prediction_polar):
         # # Filter the keys by distance thresholds
         primary_filtered_keys = [k for k in clusters.keys() if k != -1 and 
                         utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
-                        utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < self.MAX_TRACK_DEVIATION and
-                        clusters[k]['length'] < self.MAX_CLUSTER_LENGTH
+                        utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < self.MAX_TRACK_DEVIATION 
+                        # clusters[k]['count'] < self.MAX_CLUSTER_COUNT
                         ]
         
         # Set the key amount
-        if len(primary_filtered_keys) > 2   : c_MAX_TRACK_DEVIATION = 0.2
+        if len(primary_filtered_keys) > 2   : c_MAX_TRACK_DEVIATION = 0.3
         else                                : c_MAX_TRACK_DEVIATION = 0.4
 
         # Filter the keys by distance thresholds
         filtered_keys = [k for k in clusters.keys() if k != -1 and 
                         utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
-                        utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < c_MAX_TRACK_DEVIATION and
-                        clusters[k]['length'] < self.MAX_CLUSTER_LENGTH
+                        utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < c_MAX_TRACK_DEVIATION 
+                        # clusters[k]['count'] < self.MAX_CLUSTER_COUNT
                         ]
 
-        t1 = time.time()
-        for label, cluster_data in clusters.items():
-            previous_composite_distances = []            
-            for previous_label, previous_cluster_data in self.previous_clusters.items():
-                previous_composite_distances.append((
-                        previous_label,
-                        utils.wasserstein_distance(
-                            cluster_data['mean_vector'],
-                            cluster_data['covariance'],
-                            previous_cluster_data['mean_vector'],
-                            previous_cluster_data['covariance']
-                        )
-                    )
-                )
-
-            # Check if the lowest distance metric is to a 
-            # lowest_distance_entry = sorted(previous_composite_distances, key=lambda x: x[1])[0]
-            # cluster_data['prev_composite_distance'] = lowest_distance_entry[1]
-
-        print(time.time()-t1)
+        # Set trackable property
+        for key in list(clusters.keys()):
+            if key not in filtered_keys:    clusters[key]['trackable'] = False    
 
         return filtered_keys
 

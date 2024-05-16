@@ -31,8 +31,8 @@ MARGIN_RIGHT    = 0.25
 MARGIN_LEFT     = 0.25
 
 # Manuvering treshold
-thresh_degrees = 10
-thresh_meters = 0.025
+thresh_degrees = 15
+thresh_meters = 0.05
 
 # Startign speech process
 def run_speech_server():
@@ -177,9 +177,13 @@ def get_control(distance, direction):
 
 def get_heading():
     # Read compass data (Heading, Roll, Pitch)
-    heading, roll, pitch = bno.getVector(BNO055.VECTOR_EULER)
-
-    return heading
+    for i in range(3):
+        try:
+            heading, roll, pitch = bno.getVector(BNO055.VECTOR_EULER)
+            return heading
+        except Exception:
+            time.sleep(0.01)
+            continue
 
 def correct_angle(angle, heading):
     # Adjust object_degree by magnetic_heading
@@ -207,14 +211,14 @@ while True:
         else                        : pwm_A, pwm_B = 0, 0 
 
         # Obstacle detection
-        if      obstacle_detection(tracking.clusters, 315, 45, MARGIN_FRONT, heading) \
-            and forward.is_set()    : stop.set(); forward.clear()                           ; print('FWD')
-        if      obstacle_detection(tracking.clusters, 45, 135, MARGIN_RIGHT, heading) \
-            and right.is_set() or left.is_set() : stop.set(); right.clear(); left.clear()   ; print('RGT')
-        if      obstacle_detection(tracking.clusters, 135, 225, MARGIN_REAR, heading)\
-            and reverse.is_set()                : stop.set(); reverse.clear()               ; print('REV')
-        if      obstacle_detection(tracking.clusters, 225, 315, MARGIN_LEFT, heading)\
-            and left.is_set() or right.is_set() : stop.set(); left.clear(); right.clear()   ; print('LEF')
+        if      obstacle_detection(tracking.clusters, 330, 30, MARGIN_FRONT, heading) \
+            and forward.is_set()                    : stop.set(); forward.clear()               ; print('FWD')
+        if      obstacle_detection(tracking.clusters, 30, 150, MARGIN_RIGHT, heading) \
+            and (right.is_set() or left.is_set())   : stop.set(); right.clear(); left.clear()   ; print('RGT')
+        if      obstacle_detection(tracking.clusters, 150, 210, MARGIN_REAR, heading)\
+            and reverse.is_set()                    : stop.set(); reverse.clear()               ; print('REV')
+        if      obstacle_detection(tracking.clusters, 210, 330, MARGIN_LEFT, heading)\
+            and (left.is_set() or right.is_set())   : stop.set(); left.clear(); right.clear()   ; print('LEF')
 
         # Voice command directions state machine
         if forward.is_set()     : pwm_A, pwm_B = 100, 100       #; print('FWD')
@@ -226,7 +230,7 @@ while True:
         # Control the motors with set PWM values
         interface.control(-pwm_A, -pwm_B)
 
-        # print(time.time() - t1)
+        print(time.time() - t1)
    
     # Exiting program after keyboardinterrupt
     except KeyboardInterrupt:
