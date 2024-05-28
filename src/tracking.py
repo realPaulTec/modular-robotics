@@ -2,7 +2,7 @@ from collections import defaultdict
 import threading
 from sklearn.cluster import DBSCAN
 import utils
-from lidar import Lidar
+from drivers.lidar import Lidar
 import stream
 from threading import Event
 from kalman_filter import KalmanFilter
@@ -17,7 +17,7 @@ warnings.filterwarnings('ignore')
 class Tracking:
     # scanning constants
     MAX_DISTANCE_METERS     = 2
-    SAMPLE_RATE             = 882 #A2M8: 882 | A2M12: 500
+    SAMPLE_RATE             = 500 #A2M8: 882 | A2M12: 500
 
     # acquisition constants
     ACQUISITION_DISTANCE    = 0.5

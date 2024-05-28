@@ -4,9 +4,8 @@ import struct
 import time
 import copy
 
-# LAPTOP '192.168.46.62' 
-# DESKTOP '192.168.53.232'
-HOST = '192.168.165.232'
+HOST = '192.168.70.62'
+
 PORT = 65432
 
 # Send tracking data to desktop
@@ -87,6 +86,8 @@ def receive_speech(terminate_speech, engage, disengage, forward, reverse, left, 
             # Attempt to receive data
             try                         : data = int(client_socket.recv(1024).decode())
             except Exception            : continue
+
+            print(data)
 
             # State machine
             if      data == -1      : continue

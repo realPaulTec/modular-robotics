@@ -4,4 +4,4 @@
 source /home/paultec/archiconda3/bin/activate speech
 
 # Run Python script
-python3 speech/audio_processing.py
+python3 speech/voice_control.py
