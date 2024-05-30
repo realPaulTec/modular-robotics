@@ -4,7 +4,7 @@ import struct
 import time
 import copy
 
-HOST = '192.168.70.62'
+HOST = '192.168.184.62'
 
 PORT = 65432
 
@@ -61,11 +61,15 @@ def movement_setter(data, forward, reverse, left, right, stop, reset=False):
     # Clear all directions
     forward.clear(); reverse.clear(); left.clear(); right.clear(); stop.clear()
 
-    # Directions list
-    directions = [forward, reverse, left, right, stop]
+    try:
+        # Directions list
+        directions = [forward, reverse, left, right, stop]
 
-    # Set according to data
-    if not reset    : directions[data-3].set()
+        # Set according to data
+        if not reset    : directions[data-3].set()
+    
+    except Exception:
+        return
 
 def receive_speech(terminate_speech, engage, disengage, forward, reverse, left, right, stop):
     # Initial server setup
@@ -76,18 +80,16 @@ def receive_speech(terminate_speech, engage, disengage, forward, reverse, left, 
         # Setup client socket
         client_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-        print('Attempting to connect to server...')
+        print('JASPER: attempting to connect to voice control...')
         # Connect to speech server
         client_socket.connect(('localhost', 5000))
         client_socket.settimeout(2)
-        print('Connected to server.')
+        print('JASPER: connected to voice control.')
 
         while not terminate_speech.is_set():
             # Attempt to receive data
             try                         : data = int(client_socket.recv(1024).decode())
             except Exception            : continue
-
-            print(data)
 
             # State machine
             if      data == -1      : continue
@@ -97,7 +99,7 @@ def receive_speech(terminate_speech, engage, disengage, forward, reverse, left, 
             else                    : movement_setter(data, forward, reverse, left, right, stop)                                                                                # Forward, Reverse, Left, Right, Stop
     finally:
         # Closing the client
-        print(f'Closing client...')
+        print(f'JASPER: closing client...')
         client_socket.close()
 
 if __name__ == '__main__':

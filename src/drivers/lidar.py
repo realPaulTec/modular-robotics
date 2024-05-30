@@ -9,7 +9,8 @@ import queue
 
 class Lidar:
     SCAN_MODE = 1
-    MOTOR_PWM = 1000
+    MOTOR_PWM = 800
+    STAN_OFFSET = -90
 
     def __init__(self, SAMPLE_RATE, MAX_DISTANCE_METERS):
         # LiDAR constants
@@ -58,7 +59,7 @@ class Lidar:
         data = []
         for count, scan in enumerate(self.handler()):
             if 0 < scan.distance < self.MAX_DISTANCE_METERS * 1000:
-                data.append((scan.distance / 1000, -np.deg2rad(scan.angle)))
+                data.append((scan.distance / 1000, -np.deg2rad(scan.angle + self.STAN_OFFSET)))
             if count % (self.SAMPLE_RATE-1) == 0:
                 self.data_queue.queue.clear()
                 self.data_queue.put(np.array(data))

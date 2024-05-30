@@ -4,4 +4,4 @@
 cd src/
 
 # Start control.py with sudo privileges
-sudo python3 control.py
+sudo python3 jasper.py

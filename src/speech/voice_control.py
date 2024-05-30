@@ -63,17 +63,24 @@ def exit_handler():
 # Get microphone 'USB2.0 Microphone Analog Stereo'
 devices = PvRecorder.get_available_devices()
 
-try:
-    mic = devices.index('USB2.0 Microphone Analog Stereo')
 
-except ValueError:
-    print('ERROR: Microphone not found...')
-    exit_handler()
-    
+def init_recorder():
+    try     : recorder.delete()
+    except  : pass
 
-# Initialize recorder
-recorder = PvRecorder(frame_length=porcupine.frame_length, device_index=mic)
-recorder.start()
+    # Get mic index
+    try:
+        mic = [idx for idx, s in enumerate(devices) if 'USB2.0 Microphone' in s][0]
+
+    except Exception as e:
+        print(f'ERROR: {e}')
+        return
+
+    # Initialize recorder
+    recorder = PvRecorder(frame_length=porcupine.frame_length, device_index=mic)
+    recorder.start()
+
+    return recorder
 
 def setup_socket():
     global server_socket, client_socket
@@ -85,28 +92,41 @@ def setup_socket():
     
     # Listening for client
     server_socket.listen()
-    print('Server listening...')
+    print('VOICE: server listening...')
 
     # Accept connections
     client_socket, addr = server_socket.accept()
 
-    print(addr)
+    print(f"VOICE: connected to {addr}")
 
 def send_data(wake_index):
     try                     : client_socket.sendall(str(wake_index).encode())
-    except Exception as e   : print(f"Sending failed: {e}")
+    except Exception as e   : print(f"VOICE: sending failed: {e}")
 
 try:
+    recorder = init_recorder()
     setup_socket()
 
     while True:
-        pcm = recorder.read()
+        if recorder == None:
+            try:
+                recorder = init_recorder()
+                print("VOICE: recorder reinitialized!")
+            except  : pass
+
+        try:
+            pcm = recorder.read()
+        except Exception as e:
+            recorder = None 
+
+            continue
+        
         wake_index = int(porcupine.process(pcm))
 
         if wake_index != -1:
-            print(wake_index)
-
+            print(f"VOICE: detected {wake_index}")
             threading.Thread(target=send_data, daemon=True, args=(wake_index,)).start()
+
 except Exception as e : print(e)
 finally:
     exit_handler()

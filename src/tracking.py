@@ -16,24 +16,24 @@ warnings.filterwarnings('ignore')
 
 class Tracking:
     # scanning constants
-    MAX_DISTANCE_METERS     = 2
-    SAMPLE_RATE             = 500 #A2M8: 882 | A2M12: 500
+    MAX_DISTANCE_METERS     = 3
+    SAMPLE_RATE             = 600 #500 #A2M8: 882 | A2M12: 500
 
     # acquisition constants
-    ACQUISITION_DISTANCE    = 0.5
+    ACQUISITION_DISTANCE    = 1.3
     ACQUISITION_ANGLE       = 0
     ACQUISITION_RADIUS      = 0.2
 
     # DBSCAN constants
-    DBSCAN_EPS              = 0.085
-    DBSCAN_MIN_SAMPLES      = 3
+    DBSCAN_EPS              = 0.125 # 0.085
+    DBSCAN_MIN_SAMPLES      = 5
 
     # tracking constants
     MAX_TRACK_DEVIATION     = 0.5
     MAX_TRACK_LIFETIME      = 1.0
     MAX_TRACK_RUNAWAY       = 0.8
     MAX_CLUSTER_COUNT       = 50
-    MAX_METRIC              = 0.04
+    MAX_METRIC              = 0.1
 
     def __init__(self):
         # lidar and kalman setup
@@ -116,22 +116,8 @@ class Tracking:
         # Select the cluster with the lowest distance metric
         current_target = min(filtered_keys, key=lambda k: clusters[k]["composite_distance"], default=None)
 
-        # Set previous clusters
-        self.previous_clusters = clusters
-
-        if current_target:
-            # Get metric to last tracked point
-            previous_target_distance = utils.general_wasserstein_distance(
-                np.array(self.previous_target['points_cartesian']) - np.array(self.previous_target['mean_vector']),
-                np.array(clusters[current_target]['points_cartesian']) - np.array(clusters[current_target]['mean_vector'])
-            )
-
-            clusters[current_target]['prev_composite_distance'] = previous_target_distance
-
-        else:
-            previous_target_distance = self.MAX_METRIC
-
-        if previous_target_distance < self.MAX_METRIC:
+        # Bring track to next frame
+        if current_target: #previous_target_distance < self.MAX_METRIC:
             # Set previous target
             self.previous_target = clusters[current_target]
             
@@ -168,6 +154,7 @@ class Tracking:
 
         # Euclidean metric for distance calculation
         dbscan = DBSCAN(eps=self.DBSCAN_EPS, min_samples=self.DBSCAN_MIN_SAMPLES, metric='euclidean').fit(transformed_coordinates)
+        
         return dbscan.labels_
 
     def process_clusters(self, labels, coordinates):
@@ -247,6 +234,8 @@ class Tracking:
             # Skip noise
             if label == -1 or not cluster_data['trackable']: continue
 
+            ctime = time.time()    
+
             # Calculate distance metric
             cluster_data['composite_distance'] = utils.general_wasserstein_distance(
                 np.array(self.previous_target['points_cartesian'] + (current_prediction - self.previous_target['mean_vector'])),
@@ -264,8 +253,8 @@ class Tracking:
                         ]
         
         # Set the key amount
-        if len(primary_filtered_keys) > 2   : c_MAX_TRACK_DEVIATION = 0.3
-        else                                : c_MAX_TRACK_DEVIATION = 0.4
+        if len(primary_filtered_keys) > 2   : c_MAX_TRACK_DEVIATION = 0.35
+        else                                : c_MAX_TRACK_DEVIATION = 0.45
 
         # Filter the keys by distance thresholds
         filtered_keys = [k for k in clusters.keys() if k != -1 and 
@@ -299,8 +288,13 @@ if __name__ == "__main__":
     def continuous_tracking():
         while True:
             itime = time.time()
+
             tracking.track_cycle()
-            print(f"dtime: {time.time() - itime}")
+            
+            dtime = time.time() - itime
+
+            if dtime > 0.2:
+                print(f"dtime: {dtime}")
     
     # setting up separate daemon thread for scanning and tracking
     tracking_thread = threading.Thread(target=continuous_tracking) 
