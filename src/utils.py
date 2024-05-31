@@ -135,7 +135,7 @@ def wasserstein_distance(mean1, cov1, mean2, cov2):
 
     return np.sqrt(mean_dist_squared + cov_dist)
 
-def general_wasserstein_distance(distribution1, distribution2, epsilon=0.1):
+def general_wasserstein_distance(distribution1, distribution2, epsilon=0.5):
     # Define uniform weights for each cluster
     n1 = distribution1.shape[0]
     n2 = distribution2.shape[0]

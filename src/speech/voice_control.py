@@ -35,7 +35,7 @@ porcupine = pvporcupine.create(access_key=picovoice_key, keyword_paths=[
     1.0,
     0.4,
     0.4,
-    0.4,
+    0.3,
     0.4,
     1.0
 ])

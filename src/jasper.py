@@ -49,8 +49,8 @@ speech.start()
 ### MOTOR DRIVER
 
 saber = Sabertooth("/dev/ttyTHS1", baudrate=9600, address=128, timeout=0.4)
-saber.sendCommand(16, 15) # 
-
+# saber.sendCommand(16, 18) # 
+saber.sendCommand(16, 14)
 
 ### TRACKING
 
@@ -97,21 +97,23 @@ def exit_handler():
 
 ### DISTANCE
 
-TRACK_DISTANCE      = 1.3
+TRACK_DISTANCE      = 1.45
 DISTANCE_THRESHOLD  = 0.1
-ANGLE_THRESHOLD     = 10
+STOP_THRESHOLD      = 0.2
+ANGLE_THRESHOLD     = 5
 
 
 ### ACCELERATION
 
-ACCEL_LINEAR        = 1.2
-ACCEL_TURN          = 1.5
+ACCEL_FRONT         = 1.0
+ACCEL_REAR          = 1.0
+ACCEL_TURN          = 2.0
 
 
 ### MAX SPEED & MAX SPEED DIFFERENCE
 
-MAX_SPEED           = 40
-MAX_REVERSE         = -30
+MAX_SPEED           = 50
+MAX_REVERSE         = -35
 MAX_SPEED_DIFF      = 100
 
 
@@ -122,7 +124,7 @@ TURN_DIFF           = 20
 
 ### SAFETY MARGINS
 
-MARGIN_FRONT        = 1.25
+MARGIN_FRONT        = 1.3
 MARGIN_REAR         = 0.6
 MARGIN_SIDES        = 0.6
 
@@ -133,8 +135,10 @@ MARGIN_SIDES        = 0.6
 
 ### VARIABLES
 
-sspeed = 35
-tspeed = 25
+sspeed = 40 #35
+rspeed = 35
+tspeed = 28 #25
+prev_distance = 0
 
 # Set speed of each motor
 speed_left, speed_right = 0, 0
@@ -146,8 +150,6 @@ precision_mode = False
 ### OBSTACLE DETECTION
 
 def detect_obstacles(speed_left, speed_right, heading, fac=1.0):
-    print(f"2 {heading}")
-
     # Check sides if turning
     if np.abs(speed_right - speed_left) > TURN_DIFF:
         return utils.obstacle_detection(tracking.clusters, 30, 150, MARGIN_SIDES*fac, heading) or\
@@ -176,7 +178,7 @@ def speech_client():
 
 
 def main_loop():
-    global speed_left, speed_right
+    global speed_left, speed_right, prev_distance
 
     ### DELTA TIME 1
 
@@ -186,8 +188,8 @@ def main_loop():
     ### FETCHING SENSOR HEADING
 
     heading = utils.get_heading(bno)
-    print(f"1 {heading}")
-    
+
+
     ### TRACKING USER
 
     tracking.track_cycle(heading=heading)
@@ -200,36 +202,53 @@ def main_loop():
         # Get relative distance and angle to user
         distance, angle = tracking.tracked_point[0], utils.correct_angle(np.rad2deg(tracking.tracked_point[1]), heading)
 
+        # Init previous distance
+        if prev_distance == 0:  prev_distance = distance
+
         # Turning control
         if angle < -ANGLE_THRESHOLD:
-            speed_right += ACCEL_TURN
-            speed_left  -= ACCEL_TURN
+            if speed_right < MAX_SPEED  : speed_right += ACCEL_TURN
+            if speed_left > MAX_REVERSE : speed_left  -= ACCEL_TURN
         
         elif angle > ANGLE_THRESHOLD:
-            speed_right -= ACCEL_TURN
-            speed_left  += ACCEL_TURN
+            if speed_right > MAX_REVERSE    : speed_right  -= ACCEL_TURN
+            if speed_left < MAX_SPEED       : speed_left += ACCEL_TURN
 
-        # Distance control
+        else:
+            if speed_right > speed_left : speed_left = speed_right
+            if speed_left > speed_right : speed_right = speed_left   
+
+        # Distance control  
         if distance - TRACK_DISTANCE > -DISTANCE_THRESHOLD:
-            speed_right += ACCEL_LINEAR
-            speed_left  += ACCEL_LINEAR
+            speed_right += ACCEL_FRONT
+            speed_left  += ACCEL_FRONT
 
         elif distance - TRACK_DISTANCE < DISTANCE_THRESHOLD:
-            speed_right -= ACCEL_LINEAR
-            speed_left  -= ACCEL_LINEAR
+            speed_right = +MAX_REVERSE
+            speed_left  = MAX_REVERSE
 
-        # Enforce speed caps
-        if speed_right > MAX_SPEED  : speed_right = MAX_SPEED
-        if speed_left > MAX_SPEED   : speed_left = MAX_SPEED
+        elif distance - TRACK_DISTANCE > -STOP_THRESHOLD and\
+              speed_left < 0 and speed_right < 0:
+            
+            speed_right = 0
+            speed_left = 0
 
-        if speed_right < MAX_REVERSE    : speed_right = MAX_REVERSE
-        if speed_left < MAX_REVERSE     : speed_left = MAX_REVERSE
+        elif distance - TRACK_DISTANCE < STOP_THRESHOLD and\
+              speed_left > 0 and speed_right > 0:
+            
+            speed_right = 0
+            speed_left = 0
+
+        # NOTE NOTE NOTE
 
         # Enforce max. difference
         if np.abs(speed_right - speed_left) > MAX_SPEED_DIFF:
             if speed_left < speed_right     : speed_left = speed_right - MAX_SPEED_DIFF
             elif speed_right < speed_left   : speed_right = speed_left - MAX_SPEED_DIFF
-    
+
+        # Set previous distance
+        prev_distance = distance
+            
     else:
         speed_left, speed_right = 0, 0
 
@@ -240,17 +259,17 @@ def main_loop():
 
     # Voice command directions state machine
     if forward.is_set()     : speed_left, speed_right = sspeed  , sspeed    #; print('FWD')
-    elif reverse.is_set()   : speed_left, speed_right = -sspeed , -sspeed   #; print('REV')
-    elif left.is_set()      : speed_left, speed_right = -tspeed , tspeed    #; print('LEF')
-    elif right.is_set()     : speed_left, speed_right = tspeed  , -tspeed   #; print('RGT')
+    elif reverse.is_set()   : speed_left, speed_right = -rspeed , -rspeed   #; print('REV')
+    elif left.is_set()      : speed_left, speed_right = tspeed , -tspeed    #; print('LEF')
+    elif right.is_set()     : speed_left, speed_right = -tspeed  , tspeed   #; print('RGT')
     elif stop.is_set()      : speed_left, speed_right = 0       , 0         #; print('STP')
 
 
     ### OBSTACLE DETECTION
 
-    if detect_obstacles(speed_left, speed_right, heading, fac=1.0):
-        print("JASPER: Obstacle detected!")
-        speed_left, speed_right = 0, 0
+    # if detect_obstacles(speed_left, speed_right, 360 - heading, fac=1.0):
+    #     print("JASPER: Obstacle detected!")
+    #     speed_left, speed_right = 0, 0
 
 
     ### DRIVE MOTORS

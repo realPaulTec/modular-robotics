@@ -202,6 +202,7 @@ class Tracking:
                 self.tracked_point = cluster_data['central_position']
 
                 # Update Kalman filter
+                self.kalman_filter = KalmanFilter(self.ACQUISITION_DISTANCE)
                 self.kalman_filter.update(cluster_data)
                 
                 # Updating tracking status and last track time
@@ -276,9 +277,6 @@ class Tracking:
         # Reset tracking and override
         self.tracking = False
         self.override = True
-
-        # Reset Kalman filter
-        self.kalman_filter = KalmanFilter(self.ACQUISITION_DISTANCE)
 
 if __name__ == "__main__":
     # Generating new tracking class
