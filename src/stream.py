@@ -12,6 +12,7 @@ PORT = 65432
 def send_data(tracking_data):
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         data = pickle.dumps(tracking_data)
+        
         # Prefix each message with a 4-byte length (network byte order)
         message = struct.pack('>I', len(data)) + data
         
@@ -29,10 +30,10 @@ def convert_for_sending(tracking):
     tracking_data = {
         'tracking'      : tracking.tracking,
         'tracked_point' : tracking.tracked_point,
+        'range'         : tracking.RANGE,
         'prediction'    : tracking.prediction,
         'clusters'      : clusters_dict,
         'override'      : tracking.override,
-        'accuracy'      : tracking.kalman_accuracy,
         'heading'       : tracking.heading
     }
 
@@ -94,8 +95,8 @@ def receive_speech(terminate_speech, engage, disengage, forward, reverse, left, 
             # State machine
             if      data == -1      : continue
             elif    data == 0       : pass                                                                                                                                      # Listen
-            elif    data == 1       : engage.set(); disengage.clear(); movement_setter(data, forward, reverse, left, right, stop, reset=True); print('\rENGAGED', end='')       # Engage
-            elif    data == 2       : disengage.set(); engage.clear(); movement_setter(data, forward, reverse, left, right, stop, reset=True); print('\rDISENGAGED', end='')    # Disengage
+            elif    data == 1       : engage.set(); disengage.clear(); movement_setter(data, forward, reverse, left, right, stop, reset=True); print('ENGAGED')                 # Engage
+            elif    data == 2       : disengage.set(); engage.clear(); movement_setter(data, forward, reverse, left, right, stop, reset=True); print('DISENGAGED')              # Disengage
             else                    : movement_setter(data, forward, reverse, left, right, stop)                                                                                # Forward, Reverse, Left, Right, Stop
     finally:
         # Closing the client

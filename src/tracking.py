@@ -16,28 +16,26 @@ warnings.filterwarnings('ignore')
 
 class Tracking:
     # scanning constants
-    MAX_DISTANCE_METERS     = 3
-    SAMPLE_RATE             = 600 #500 #A2M8: 882 | A2M12: 500
+    RANGE                   = 4.5
+    SAMPLE_RATE             = 600 #A2M8: 882 | A2M12: 500
 
     # acquisition constants
     ACQUISITION_DISTANCE    = 1.3
     ACQUISITION_ANGLE       = 0
-    ACQUISITION_RADIUS      = 0.2
+    ACQUISITION_RADIUS      = 0.3
 
     # DBSCAN constants
-    DBSCAN_EPS              = 0.125 # 0.085
-    DBSCAN_MIN_SAMPLES      = 5
+    DBSCAN_EPS              = 0.12 # 0.085
+    DBSCAN_MIN_SAMPLES      = 3
 
     # tracking constants
-    MAX_TRACK_DEVIATION     = 0.5
-    MAX_TRACK_LIFETIME      = 1.0
-    MAX_TRACK_RUNAWAY       = 0.8
-    MAX_CLUSTER_COUNT       = 50
-    MAX_METRIC              = 0.1
+    TRACK_DEVIATION         = 0.65
+    TRACK_LIFETIME          = 1.0
+    TRACK_RUNAWAY           = 1.0
 
     def __init__(self):
         # lidar and kalman setup
-        self.lidar = Lidar(self.SAMPLE_RATE, self.MAX_DISTANCE_METERS)   
+        self.lidar = Lidar(self.SAMPLE_RATE, self.RANGE)   
 
         # Kalman filter
         self.kalman_filter = KalmanFilter(self.ACQUISITION_DISTANCE)
@@ -50,6 +48,7 @@ class Tracking:
         self.tracking = False
         self.override = False
         self.tracked_point = ()
+        self._coordinates = []
         self.clusters = {}
         
         # Historical tracking
@@ -59,7 +58,6 @@ class Tracking:
 
         # Class variables
         self.send_data = Event()
-        self.kalman_accuracy = 0
         self.heading = 0
 
     def track_cycle(self, heading=0):
@@ -73,6 +71,7 @@ class Tracking:
         if not coordinates.any(): self.clusters.clear(); return
         
         # Offset coordinates
+        self._coordinates = coordinates
         coordinates = self.offset_coordinates(coordinates, angle=heading)
 
         # Perform DBSCAN clustering and returning labels
@@ -117,7 +116,7 @@ class Tracking:
         current_target = min(filtered_keys, key=lambda k: clusters[k]["composite_distance"], default=None)
 
         # Bring track to next frame
-        if current_target: #previous_target_distance < self.MAX_METRIC:
+        if current_target:
             # Set previous target
             self.previous_target = clusters[current_target]
             
@@ -134,7 +133,7 @@ class Tracking:
             self.kalman_filter.update(clusters[current_target])
 
         # Reset tracking if MAX_TRACK_LIFETIME has been exceeded
-        elif (self.last_track + self.MAX_TRACK_LIFETIME) < time.time():
+        elif (self.last_track + self.TRACK_LIFETIME) < time.time():
             self.reset_tracking()
 
         # Pass prediction to user interface for drawing arrow
@@ -225,17 +224,12 @@ class Tracking:
             # Set mean vector and covariance of each cluster 
             cluster_data['mean_vector'], cluster_data['covariance'] = utils.mean_and_covariance(np.array(cluster_data['points_cartesian']))
 
-            # Calculate the length of each cluster
-            cluster_data['length'] = int(round(utils.calculate_cluster_length(cluster_data['points_cartesian']) * cluster_data['central_position'][0]))
-
         return clusters
 
     def compute_distance_metric(self, clusters, current_prediction, filter_covariance):
         for label, cluster_data in clusters.items():
             # Skip noise
             if label == -1 or not cluster_data['trackable']: continue
-
-            ctime = time.time()    
 
             # Calculate distance metric
             cluster_data['composite_distance'] = utils.general_wasserstein_distance(
@@ -246,22 +240,10 @@ class Tracking:
         return clusters
 
     def filter_keys(self, clusters, current_prediction_polar):
-        # # Filter the keys by distance thresholds
-        primary_filtered_keys = [k for k in clusters.keys() if k != -1 and 
-                        utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
-                        utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < self.MAX_TRACK_DEVIATION 
-                        # clusters[k]['count'] < self.MAX_CLUSTER_COUNT
-                        ]
-        
-        # Set the key amount
-        if len(primary_filtered_keys) > 2   : c_MAX_TRACK_DEVIATION = 0.35
-        else                                : c_MAX_TRACK_DEVIATION = 0.45
-
         # Filter the keys by distance thresholds
         filtered_keys = [k for k in clusters.keys() if k != -1 and 
-                        utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.MAX_TRACK_RUNAWAY and
-                        utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < c_MAX_TRACK_DEVIATION 
-                        # clusters[k]['count'] < self.MAX_CLUSTER_COUNT
+                        utils.distance_polar(clusters[k]['central_position'], self.tracked_point) < self.TRACK_RUNAWAY and
+                        utils.distance_polar(clusters[k]['central_position'], current_prediction_polar) < self.TRACK_DEVIATION
                         ]
 
         # Set trackable property
@@ -295,8 +277,7 @@ if __name__ == "__main__":
                 print(f"dtime: {dtime}")
     
     # setting up separate daemon thread for scanning and tracking
-    tracking_thread = threading.Thread(target=continuous_tracking) 
-    tracking_thread.daemon = True
+    tracking_thread = threading.Thread(target=continuous_tracking, daemon=True)
     tracking_thread.start()
 
     # Socket UI

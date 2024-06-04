@@ -1,6 +1,14 @@
 import time
-
 import numpy as np
+
+def get_speed(speed, thresh=20):
+    if np.abs(speed) < thresh:
+        return np.sign(speed) * thresh
+    
+    else:
+        return speed
+    
+ # 10 * np.sign(x) * np.sqrt(np.abs(x))
 
 def correct_angle(angle, heading):
     # Adjust object_degree by magnetic_heading
@@ -11,7 +19,7 @@ def correct_angle(angle, heading):
     
     return adjusted_angle
 
-def obstacle_detection(clusters, min_angle, max_angle, max_distance, heading):
+def _obstacle_detection(clusters, min_angle, max_angle, max_distance, heading):
     # Return false if there are no clusters
     if len(clusters) == 0: return False
     
@@ -34,6 +42,25 @@ def obstacle_detection(clusters, min_angle, max_angle, max_distance, heading):
     # Return false is there is no obstacle in the area
     return False
 
+def obstacle_detection(tracking, min_angle, max_angle, depth, label=None):
+    # Return false if there are no clusters
+    if len(tracking._coordinates) == 0: return False
+  
+    # Get comparison type
+    s = True if min_angle > max_angle else False
+
+    # Convert to radians
+    min_angle = np.deg2rad(min_angle)
+    max_angle = np.deg2rad(max_angle)
+
+    for radius, angle in tracking._coordinates:
+        # Skip if radius not in range
+        if radius > depth: continue
+
+        # print(-angle)
+
+        if s and (-angle > min_angle or -angle < max_angle)                 : return True
+        elif s == False and (-angle > min_angle and -angle < max_angle)     : return True
 
 def get_heading(bno):
     # Read compass data (Heading, Roll, Pitch)

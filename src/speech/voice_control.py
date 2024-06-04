@@ -2,7 +2,9 @@ import json
 import os
 import socket
 import threading
+import time
 from pvrecorder import PvRecorder
+import pvkoala
 import pvporcupine
 
 print('Initializing voice control...')
@@ -31,14 +33,17 @@ porcupine = pvporcupine.create(access_key=picovoice_key, keyword_paths=[
     f"{script_dir}/wakewords/onyx-stop.ppn"
 ], sensitivities=[
     0.3,
-    0.7,
     1.0,
-    0.4,
-    0.4,
-    0.3,
-    0.4,
+    1.0,
+    0.6,
+    0.6,
+    0.6,
+    0.6,
     1.0
 ])
+
+# Create noise supressor
+koala = pvkoala.create(access_key=picovoice_key)
 
 
 # Exit handler
@@ -72,7 +77,7 @@ def init_recorder():
     try:
         mic = [idx for idx, s in enumerate(devices) if 'USB2.0 Microphone' in s][0]
 
-    except Exception as e:
+    except IndexError as e:
         print(f'ERROR: {e}')
         return
 
@@ -112,20 +117,27 @@ try:
             try:
                 recorder = init_recorder()
                 print("VOICE: recorder reinitialized!")
-            except  : pass
+            except IndexError   : pass
 
         try:
-            pcm = recorder.read()
-        except Exception as e:
-            recorder = None 
+            # Read microphone frame
+            recording = recorder.read()
+            
+            # Noise supression
+            processed_recording =   koala.process(recording[:koala.frame_length]) + \
+                                    koala.process(recording[koala.frame_length:])
 
+        except AttributeError:
+            recorder = None
             continue
         
-        wake_index = int(porcupine.process(pcm))
+        wake_index = int(porcupine.process(processed_recording))
 
         if wake_index != -1:
             print(f"VOICE: detected {wake_index}")
             threading.Thread(target=send_data, daemon=True, args=(wake_index,)).start()
+
+            time.sleep(0.05)
 
 except Exception as e : print(e)
 finally:

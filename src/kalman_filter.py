@@ -27,7 +27,7 @@ class KalmanFilter:
         self.kalman_filter.P *= 1.0
         
         # Process Uncertainty
-        self.kalman_filter.Q = np.eye(4) * 0.01
+        self.kalman_filter.Q = np.eye(4) * 1
         
         # Measurement Uncertainty
         self.kalman_filter.R = np.eye(2) * 0.1
