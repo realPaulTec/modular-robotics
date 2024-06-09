@@ -4,7 +4,7 @@ import struct
 import time
 import copy
 
-HOST = '192.168.28.62'
+HOST = '192.168.149.62'
 
 PORT = 65432
 

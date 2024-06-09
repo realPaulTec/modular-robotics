@@ -96,11 +96,13 @@ def exit_handler():
 
 ### DISTANCE
 
-FORWARD_THRESHOLD   = 1.50
-REVERSE_THRESHOLD   = 1.12
+B_OFFSET            = 0.3 
 
-FWD_STOP            = 1.40
-REV_STOP            = 1.15
+FORWARD_THRESHOLD   = 1.50 + B_OFFSET
+REVERSE_THRESHOLD   = 1.12 + B_OFFSET
+
+FWD_STOP            = 1.40 + B_OFFSET
+REV_STOP            = 1.15 + B_OFFSET
 
 ANGLE_THRESHOLD     = 12
 ANGLE_STOP          = 10
@@ -127,7 +129,7 @@ TURN_DIFF           = 20
 
 ### SAFETY MARGINS
 
-MARGIN_FRONT        = 1.40
+MARGIN_FRONT        = 1.40 + B_OFFSET
 MARGIN_REAR         = 0.65
 MARGIN_SIDES        = 0.6
 
@@ -140,7 +142,7 @@ MARGIN_SIDES        = 0.6
 
 sspeed = 55
 rspeed = 35
-tspeed = 32
+tspeed = 40
 hard_turn = False
 
 # Set speed of each motor
@@ -160,7 +162,7 @@ def detect_obstacles(speed_left, speed_right, fac=1.0):
 
     # Check front if going forwards
     if 0 < speed_left and 0 < speed_right:
-        return utils.obstacle_detection(tracking, 160, 200, MARGIN_FRONT*fac, label="FRONT")
+        return utils.obstacle_detection(tracking, 150, 210, MARGIN_FRONT*fac, label="FRONT")
 
     # Check rear if going in reverse
     if 0 > speed_left and 0 > speed_right:
@@ -197,6 +199,8 @@ def main_loop():
     ### TRACKING USER
 
     tracking.track_cycle(heading=heading)
+
+    # print(f"DT {time.time() - t1}")
 
 
     ### MOTOR CONTROL
@@ -289,7 +293,7 @@ def main_loop():
 
     ### PRINT DELTA TIME
 
-    # print(f"DT {time.time() - t1}")
+    # print(f"DTF {time.time() - t1}")
 
 if __name__ == "__main__":
     while True:

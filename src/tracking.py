@@ -267,14 +267,11 @@ if __name__ == "__main__":
     # Continuous tracking loop
     def continuous_tracking():
         while True:
-            itime = time.time()
+            t1 = time.time()
 
             tracking.track_cycle()
             
-            dtime = time.time() - itime
-
-            if dtime > 0.2:
-                print(f"dtime: {dtime}")
+            print(f"dtime: {time.time() - t1}")
     
     # setting up separate daemon thread for scanning and tracking
     tracking_thread = threading.Thread(target=continuous_tracking, daemon=True)
