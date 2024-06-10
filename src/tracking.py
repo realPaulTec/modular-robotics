@@ -64,28 +64,31 @@ class Tracking:
         # Send data to user interface
         self.send_data.set()
 
+        t1 = time.time()
         # Get LiDAR data from scan
         coordinates = self.lidar.fetch_scan_data()
+        print(f'RET. LiDAR DATA {time.time() - t1}')                        # ~0s
 
         # Restart loop if there is no data or it is the first iterations
         if not coordinates.any(): self.clusters.clear(); return
         
         # Offset coordinates
         self._coordinates = coordinates
-        coordinates = self.offset_coordinates(coordinates, angle=heading)
+        coordinates = self.offset_coordinates(coordinates, angle=heading)   # ~0s
 
         # Perform DBSCAN clustering and returning labels
-        labels = self.clustering(coordinates)
+        labels = self.clustering(coordinates)                               # 0.01 - 0.02s
 
         # Stop sending data
         self.send_data.clear()
 
         # Process cluster labels to cluster dictionary
-        clusters = self.process_clusters(labels, coordinates)
+        clusters = self.process_clusters(labels, coordinates)               # 0.015 - 0.047s
 
         # Compute pre-tracking properties of clusters in single loop
-        clusters = self.compute_properties(clusters)
-
+        t1 = time.time()
+        clusters = self.compute_properties(clusters)                        # 0.015 - 0.025s; ~0.004 - 0.012s
+        print(time.time()-t1)
         # Pass clusters and heading to user interface
         self.clusters = clusters
         self.heading = heading
@@ -218,12 +221,12 @@ class Tracking:
             # Skip noise
             if label == -1: continue
 
-            # Compute polar centers of each cluster
-            cluster_data['central_position'] = utils.calculate_polar_center(np.array(cluster_data['points']))
-
             # Set mean vector and covariance of each cluster 
-            cluster_data['mean_vector'], cluster_data['covariance'] = utils.mean_and_covariance(np.array(cluster_data['points_cartesian']))
-
+            cluster_data['mean_vector'], _ = utils.mean_and_covariance(np.array(cluster_data['points_cartesian']), False)
+            
+            # Return calculate polar coordinates
+            cluster_data['central_position'] = utils.cartesian_to_polar(*cluster_data['mean_vector'])
+                
         return clusters
 
     def compute_distance_metric(self, clusters, current_prediction, filter_covariance):
