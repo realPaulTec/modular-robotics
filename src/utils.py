@@ -78,9 +78,13 @@ def offset_polar_coordinates(coordinates, linear_displacement, angular_displacem
     return displaced_coordinates
 
 # Calculate mean and covariance from 2D point cloud
-def mean_and_covariance(data):
+def mean_and_covariance(data, calc_covariance):
+    # Compute mean vector of cluster
     mean_vector = np.mean(data, axis=0)
-    covariance_matrix = np.cov(data, rowvar=False)
+    
+    # Compute covariance if necessary
+    covariance_matrix = np.cov(data, rowvar=False) if calc_covariance else None
+    
     return mean_vector, covariance_matrix
 
 # Calculate Bhattacharyya distance metric

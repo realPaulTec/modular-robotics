@@ -1,3 +1,4 @@
+import atexit
 import numpy as np
 from drivers.BNO055 import BNO055
 from drivers.PySabertooth import Sabertooth
@@ -89,6 +90,8 @@ def exit_handler():
     # Exit program
     os._exit(0)
 
+# Register exit handler
+atexit.register(exit_handler)
 
 ####
 ####    CONSTANTS
@@ -96,7 +99,7 @@ def exit_handler():
 
 ### DISTANCE
 
-B_OFFSET            = 0.3 
+B_OFFSET            = 0.0 #.3 
 
 FORWARD_THRESHOLD   = 1.50 + B_OFFSET
 REVERSE_THRESHOLD   = 1.12 + B_OFFSET
@@ -104,23 +107,24 @@ REVERSE_THRESHOLD   = 1.12 + B_OFFSET
 FWD_STOP            = 1.40 + B_OFFSET
 REV_STOP            = 1.15 + B_OFFSET
 
-ANGLE_THRESHOLD     = 12
-ANGLE_STOP          = 10
+ANGLE_THRESHOLD     = 15 
+ANGLE_STOP          = 12
 
 ANGLE_HARD          = 30
 
 ### ACCELERATION
 
 ACCEL_FRONT         = 1.5
-ACCEL_TURN          = 1.0
+ACCEL_TURN          = 2.0
 
 
 ### MAX SPEED & MAX SPEED DIFFERENCE
 
-MAX_SPEED           = 90
-MAX_REVERSE         = -55
-TURN_SPEED          = 32
-
+MAX_SPEED           =  80
+MIN_SPEED           =  40
+MAX_REVERSE         = -65
+TURN_SPEED          = 55
+MIN_TURN_SPEED      = 32
 
 ### TUNING DIFFERENCE (what speed difference is considererd turning?)
 
@@ -140,9 +144,9 @@ MARGIN_SIDES        = 0.6
 
 ### VARIABLES
 
-sspeed = 55
-rspeed = 35
-tspeed = 40
+sspeed = 50
+rspeed = 20
+tspeed = 35
 hard_turn = False
 
 # Set speed of each motor
@@ -151,6 +155,7 @@ speed_left, speed_right = 0, 0
 # Precision mode with lower margins
 precision_mode = False
 hard_turn = False
+
 
 ### OBSTACLE DETECTION
 
@@ -167,7 +172,6 @@ def detect_obstacles(speed_left, speed_right, fac=1.0):
     # Check rear if going in reverse
     if 0 > speed_left and 0 > speed_right:
         return utils.obstacle_detection(tracking, 250, 130, MARGIN_REAR*fac, label="REAR")
-
     
     return False
 
@@ -230,10 +234,14 @@ def main_loop():
             if angle < -ANGLE_THRESHOLD:
                 if speed_right < MAX_SPEED  : speed_right += ACCEL_TURN
                 if speed_left > MAX_REVERSE : speed_left  -= ACCEL_TURN
+
+                speed_right = utils.get_speed(speed_right, thresh = MIN_TURN_SPEED)
             
             elif angle > ANGLE_THRESHOLD:
                 if speed_right > MAX_REVERSE    : speed_right  -= ACCEL_TURN
                 if speed_left < MAX_SPEED       : speed_left += ACCEL_TURN
+
+                speed_left = utils.get_speed(speed_left, thresh = MIN_TURN_SPEED)
 
         # Stop at specified angle
         if np.abs(angle) < ANGLE_STOP:
@@ -251,13 +259,14 @@ def main_loop():
                 speed_right = MAX_REVERSE
                 speed_left  = MAX_REVERSE
 
-            elif distance > REV_STOP and\
+            # Enforce reverse and forward stops
+            if distance > REV_STOP and\
                 speed_left < 0 and speed_right < 0:
                 
                 speed_right = 0
                 speed_left = 0
 
-            elif distance < FWD_STOP and\
+            if distance < FWD_STOP and\
                 speed_left > 0 and speed_right > 0:
                 
                 speed_right = 0
@@ -287,7 +296,8 @@ def main_loop():
 
 
     ### DRIVE MOTORS
-
+    
+    # print(speed_left, speed_right)
     saber.driveBoth(round(utils.get_speed(speed_left)), -round(utils.get_speed(speed_right)))
 
 

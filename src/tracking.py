@@ -64,10 +64,8 @@ class Tracking:
         # Send data to user interface
         self.send_data.set()
 
-        t1 = time.time()
         # Get LiDAR data from scan
-        coordinates = self.lidar.fetch_scan_data()
-        print(f'RET. LiDAR DATA {time.time() - t1}')                        # ~0s
+        coordinates = self.lidar.fetch_scan_data()                          # ~0s
 
         # Restart loop if there is no data or it is the first iterations
         if not coordinates.any(): self.clusters.clear(); return
@@ -76,19 +74,23 @@ class Tracking:
         self._coordinates = coordinates
         coordinates = self.offset_coordinates(coordinates, angle=heading)   # ~0s
 
+        # Convert to cartesian coordinates
+        # cartesian_coordinates = np.column_stack((np.sin(coordinates[:, 1]), np.cos(coordinates[:, 1])))
+        cartesian_coordinates = np.column_stack((coordinates[:, 0] * np.cos(coordinates[:, 1]), coordinates[:, 0] * np.sin(coordinates[:, 1])))
+
         # Perform DBSCAN clustering and returning labels
-        labels = self.clustering(coordinates)                               # 0.01 - 0.02s
+        labels = self.clustering(cartesian_coordinates)                     # 0.01 - 0.02s
 
         # Stop sending data
         self.send_data.clear()
 
         # Process cluster labels to cluster dictionary
-        clusters = self.process_clusters(labels, coordinates)               # 0.015 - 0.047s
+        clusters = self.process_clusters(labels, coordinates,\
+                                          cartesian_coordinates)            # 0.015 - 0.047s; ~0.002s
 
         # Compute pre-tracking properties of clusters in single loop
-        t1 = time.time()
         clusters = self.compute_properties(clusters)                        # 0.015 - 0.025s; ~0.004 - 0.012s
-        print(time.time()-t1)
+
         # Pass clusters and heading to user interface
         self.clusters = clusters
         self.heading = heading
@@ -149,17 +151,12 @@ class Tracking:
         return coordinates
 
     def clustering(self, coordinates):
-        # DBSCAN clustering
-        
-        # Converting polar to euclidean coordinates
-        transformed_coordinates = np.column_stack((np.sin(coordinates[:, 1]), np.cos(coordinates[:, 1]), coordinates[:, 0]))
-
         # Euclidean metric for distance calculation
-        dbscan = DBSCAN(eps=self.DBSCAN_EPS, min_samples=self.DBSCAN_MIN_SAMPLES, metric='euclidean').fit(transformed_coordinates)
-        
+        dbscan = DBSCAN(eps=self.DBSCAN_EPS, min_samples=self.DBSCAN_MIN_SAMPLES, metric='euclidean').fit(coordinates)
+
         return dbscan.labels_
 
-    def process_clusters(self, labels, coordinates):
+    def process_clusters(self, labels, coordinates, cartesian_coordinates):
         # Initialize clusters using defaultdict 
         clusters = defaultdict(lambda: {
             # Cartesian variables for tracking
@@ -177,11 +174,11 @@ class Tracking:
             'central_position'          : (0, 0),
             'trackable'                 : True
         })
-        
+
         for i, label in enumerate(labels):
             # Add points to cluster dictionary
             clusters[label]['points'].append(coordinates[i])
-            clusters[label]['points_cartesian'].append(utils.polar_to_cartesian(*coordinates[i]))
+            clusters[label]['points_cartesian'].append(cartesian_coordinates[i])
             
             # Updating running totals for distance
             clusters[label]['count'] += 1

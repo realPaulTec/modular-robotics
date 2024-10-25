@@ -9,7 +9,7 @@ import queue
 
 class Lidar:
     SCAN_MODE = 1
-    MOTOR_PWM = 1000
+    MOTOR_PWM = 800
     STAN_OFFSET = -90
 
     def __init__(self, SAMPLE_RATE, MAX_DISTANCE_METERS):
@@ -22,6 +22,7 @@ class Lidar:
         self.lidar.connect(port="/dev/ttyUSB0", baudrate=256000, timeout=3) # A2M8: 115200 | A2M12: 256000
 
         # print(self.lidar.get_samplerate())
+        time.sleep(1)
         
         # Getting lidar status
         health = self.lidar.get_health()
@@ -35,7 +36,7 @@ class Lidar:
         time.sleep(4)
 
         # Setting up scan handler
-        self.handler = self.lidar.start_scan_express(self.SCAN_MODE)
+        self.handler = self.lidar.start_scan() #_express(self.SCAN_MODE)
 
         # Setup the asyncio event loop for the instance
         self.loop = asyncio.get_event_loop()
@@ -58,14 +59,18 @@ class Lidar:
     async def continuous_scanning(self):
         data = []
 
+        t1 = time.time()
         for count, scan in enumerate(self.handler()):
+            
             if 0 < scan.distance < self.MAX_DISTANCE_METERS * 1000:
                 data.append((scan.distance / 1000, -np.deg2rad((scan.angle + self.STAN_OFFSET) % 360)))
-            if count % (self.SAMPLE_RATE-1) == 0:
+
+            if count % (self.SAMPLE_RATE-1) == 0:               
                 self.data_queue.queue.clear()
+            # if scan.start_flag == True:
                 self.data_queue.put(np.array(data))
                 data = []
-    
+
     # TODO Fetch and process only the last SAMPLE_RATE samples    
     def fetch_scan_data(self):
         return self.data_queue.get() 
